@@ -51,9 +51,6 @@ export default function LoginPage() {
           <Button type="submit" className="w-full" size="lg">
             Iniciar Sesión
           </Button>
-          <Text className="text-xs text-center text-gray-500 mt-4">
-            Demo: Cualquier credencial funciona
-          </Text>
         </form>
       </Card>
     </div>
