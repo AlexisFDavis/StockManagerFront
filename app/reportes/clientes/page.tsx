@@ -181,7 +181,7 @@ export default function ReportesClientesPage() {
               index="name"
               categories={['Ingresos']}
               colors={['indigo']}
-              valueFormatter={(n) => `$${n.toLocaleString()}`}
+              valueFormatter={(n: number) => `$${n.toLocaleString()}`}
               yAxisWidth={64}
               className="h-72"
             />

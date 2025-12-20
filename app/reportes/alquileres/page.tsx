@@ -228,7 +228,7 @@ export default function ReportesAlquileresPage() {
             index="date"
             categories={['Ingresos']}
             colors={['blue']}
-            valueFormatter={(n) => `$${n.toLocaleString()}`}
+            valueFormatter={(n: number) => `$${n.toLocaleString()}`}
             yAxisWidth={64}
             className="h-72"
           />
@@ -267,7 +267,7 @@ export default function ReportesAlquileresPage() {
               index="name"
               categories={['Ingresos']}
               colors={['indigo']}
-              valueFormatter={(n) => `$${n.toLocaleString()}`}
+              valueFormatter={(n: number) => `$${n.toLocaleString()}`}
               yAxisWidth={64}
               className="h-64"
               layout="vertical"
@@ -285,7 +285,7 @@ export default function ReportesAlquileresPage() {
               index="name"
               categories={['Ingresos']}
               colors={['purple']}
-              valueFormatter={(n) => `$${n.toLocaleString()}`}
+              valueFormatter={(n: number) => `$${n.toLocaleString()}`}
               yAxisWidth={64}
               className="h-64"
               layout="vertical"

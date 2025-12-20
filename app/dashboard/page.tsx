@@ -207,7 +207,7 @@ export default function DashboardPage() {
             <BarList
               data={revenueByClient}
               className="mt-4"
-              valueFormatter={(value) => `$${value.toLocaleString()}`}
+              valueFormatter={(value: number) => `$${value.toLocaleString()}`}
             />
           ) : (
             <Text className="text-gray-500 text-center py-8">Sin datos</Text>
@@ -221,7 +221,7 @@ export default function DashboardPage() {
               data={stockDistribution}
               category="value"
               index="name"
-              valueFormatter={(value) => `${value} uds`}
+              valueFormatter={(value: number) => `${value} uds`}
               className="h-48"
               colors={['blue', 'cyan', 'indigo', 'violet', 'purple']}
             />

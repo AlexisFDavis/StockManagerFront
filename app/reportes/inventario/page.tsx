@@ -196,7 +196,7 @@ export default function ReportesInventarioPage() {
               categories={['Valor']}
               colors={['indigo']}
               yAxisWidth={64}
-              valueFormatter={(n) => `$${n.toLocaleString()}`}
+              valueFormatter={(n: number) => `$${n.toLocaleString()}`}
               className="h-72"
             />
           ) : (
