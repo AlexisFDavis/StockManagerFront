@@ -20,7 +20,6 @@ export default function ReportesInventarioPage() {
   const products = useStore((state: any) => state.products);
   const rentals = useStore((state: any) => state.rentals);
 
-  // Filtros
   const [searchText, setSearchText] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
 
@@ -37,7 +36,6 @@ export default function ReportesInventarioPage() {
     });
   }, [products, searchText, stockFilter]);
 
-  // KPIs
   const totalProducts = products.length;
   const totalStock = products.reduce((sum: number, p: Product) => sum + p.stock, 0);
   const totalValue = products.reduce((sum: number, p: Product) => sum + (p.stock * p.price), 0);
@@ -45,7 +43,6 @@ export default function ReportesInventarioPage() {
   const lowStockProducts = products.filter((p: Product) => p.stock > 0 && p.stock < 10).length;
   const outOfStockProducts = products.filter((p: Product) => p.stock === 0).length;
 
-  // Datos para gráficos
   const stockByProduct = filteredProducts.map((p: Product) => ({
     name: p.name.length > 15 ? p.name.substring(0, 15) + '...' : p.name,
     Stock: p.stock,
@@ -67,7 +64,6 @@ export default function ReportesInventarioPage() {
     ];
   }, [products]);
 
-  // Productos más alquilados
   const productRentalStats = useMemo(() => {
     const stats: Record<string, { name: string; count: number; revenue: number }> = {};
     rentals.forEach((rental: any) => {
@@ -91,13 +87,11 @@ export default function ReportesInventarioPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <Title className="text-3xl font-bold text-gray-900">Reportes de Inventario</Title>
         <Text className="text-gray-500 mt-1">Análisis detallado de productos y stock</Text>
       </div>
 
-      {/* Filtros */}
       <Card className="shadow-sm border border-gray-200">
         <div className="mb-3">
           <Text className="text-sm font-semibold text-gray-700">Filtros de Búsqueda</Text>
@@ -128,7 +122,6 @@ export default function ReportesInventarioPage() {
         </div>
       </Card>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card decoration="top" decorationColor="blue" className="shadow-sm">
           <Text className="text-gray-500 text-xs">Productos</Text>
@@ -156,7 +149,6 @@ export default function ReportesInventarioPage() {
         </Card>
       </div>
 
-      {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="shadow-sm">
           <Title className="text-lg font-bold mb-4">Stock por Producto</Title>
@@ -221,7 +213,6 @@ export default function ReportesInventarioPage() {
         </Card>
       </div>
 
-      {/* Tabla de alertas */}
       <Card className="shadow-sm">
         <Title className="text-lg font-bold mb-4">⚠️ Productos que Requieren Atención</Title>
         <div className="space-y-2">

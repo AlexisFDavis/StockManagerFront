@@ -10,8 +10,6 @@ import {
   TextInput,
   Textarea,
   Badge,
-  Dialog,
-  DialogPanel,
   Metric,
   Select,
   SelectItem,
@@ -33,7 +31,6 @@ export default function InventarioPage() {
     price: 0,
   });
 
-  // Filtros
   const [searchText, setSearchText] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
 
@@ -79,7 +76,6 @@ export default function InventarioPage() {
     setIsDialogOpen(false);
   };
 
-  // KPIs
   const totalProducts = products.length;
   const totalStock = products.reduce((sum: number, p: Product) => sum + p.stock, 0);
   const lowStockProducts = products.filter((p: Product) => p.stock < 10 && p.stock > 0).length;
@@ -87,7 +83,6 @@ export default function InventarioPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <Title className="text-3xl font-bold text-gray-900">Inventario</Title>
@@ -95,35 +90,33 @@ export default function InventarioPage() {
         </div>
         <button
           onClick={openAddDialog}
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm"
+          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg"
         >
           <span className="text-lg">+</span>
           Nuevo Producto
         </button>
       </div>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card decoration="top" decorationColor="blue" className="shadow-sm">
+        <Card decoration="top" decorationColor="blue" className="shadow-md rounded-2xl">
           <Text className="text-gray-500 text-sm">Total Productos</Text>
           <Metric className="text-2xl">{totalProducts}</Metric>
         </Card>
-        <Card decoration="top" decorationColor="green" className="shadow-sm">
+        <Card decoration="top" decorationColor="green" className="shadow-md rounded-2xl">
           <Text className="text-gray-500 text-sm">Stock Total</Text>
           <Metric className="text-2xl">{totalStock.toLocaleString()}</Metric>
         </Card>
-        <Card decoration="top" decorationColor="yellow" className="shadow-sm">
+        <Card decoration="top" decorationColor="yellow" className="shadow-md rounded-2xl">
           <Text className="text-gray-500 text-sm">Stock Bajo</Text>
           <Metric className="text-2xl">{lowStockProducts}</Metric>
         </Card>
-        <Card decoration="top" decorationColor="red" className="shadow-sm">
+        <Card decoration="top" decorationColor="red" className="shadow-md rounded-2xl">
           <Text className="text-gray-500 text-sm">Sin Stock</Text>
           <Metric className="text-2xl">{outOfStockProducts}</Metric>
         </Card>
       </div>
 
-      {/* Filtros */}
-      <Card className="shadow-sm border border-gray-200">
+      <Card className="shadow-md border border-gray-200 rounded-2xl">
         <div className="mb-3">
           <Text className="text-sm font-semibold text-gray-700">Filtros de Búsqueda</Text>
         </div>
@@ -142,7 +135,7 @@ export default function InventarioPage() {
             <select
               value={stockFilter}
               onChange={(e) => setStockFilter(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+              className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all shadow-sm"
             >
               <option value="all">Todos</option>
               <option value="available">Stock disponible (≥10)</option>
@@ -153,10 +146,9 @@ export default function InventarioPage() {
         </div>
       </Card>
 
-      {/* Product Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredProducts.map((product: Product) => (
-          <Card key={product.id} className="shadow-sm hover:shadow-md transition-shadow">
+          <Card key={product.id} className="shadow-md hover:shadow-xl transition-all rounded-2xl">
             <div className="flex justify-between items-start mb-3">
               <div className="flex-1 pr-3">
                 <Text className="font-semibold text-lg text-gray-900">{product.name}</Text>
@@ -185,7 +177,7 @@ export default function InventarioPage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => openEditDialog(product)}
-                  className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md"
                 >
                   Editar
                 </button>
@@ -193,7 +185,7 @@ export default function InventarioPage() {
                   onClick={() => {
                     if (confirm('¿Eliminar este producto?')) deleteProduct(product.id);
                   }}
-                  className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all shadow-sm hover:shadow-md"
                 >
                   Eliminar
                 </button>
@@ -204,7 +196,7 @@ export default function InventarioPage() {
       </div>
 
       {filteredProducts.length === 0 && (
-        <Card className="shadow-sm">
+        <Card className="shadow-md rounded-2xl">
           <div className="text-center py-12">
             <Text className="text-gray-400 text-4xl mb-3">📦</Text>
             <Text className="text-gray-500">No se encontraron productos con los filtros aplicados</Text>
@@ -212,13 +204,27 @@ export default function InventarioPage() {
         </Card>
       )}
 
-      {/* Dialog */}
-      <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} static={true}>
-        <DialogPanel className="max-w-lg">
-          <Title className="text-xl font-bold mb-6">
-            {editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
-          </Title>
-          <form onSubmit={handleSubmit} className="space-y-4">
+      {isDialogOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+          style={{ 
+            minHeight: '100vh',
+            height: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsDialogOpen(false);
+            }
+          }}
+        >
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6">
+            <Title className="text-xl font-bold mb-6">
+              {editingProduct ? `Edición de ${editingProduct.name}` : 'Nuevo Producto'}
+            </Title>
+            <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
               <TextInput
@@ -265,20 +271,21 @@ export default function InventarioPage() {
               <button
                 type="button"
                 onClick={() => setIsDialogOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md hover:shadow-lg"
               >
                 {editingProduct ? 'Guardar' : 'Crear'}
               </button>
             </div>
           </form>
-        </DialogPanel>
-      </Dialog>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

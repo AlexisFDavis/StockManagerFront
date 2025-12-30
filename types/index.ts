@@ -16,8 +16,10 @@ export interface RentalItem {
 
 export interface Rental {
   id: string;
-  clientId: string;
-  clientName: string;
+  workId: string; // ID de la obra
+  workName: string; // Nombre de la obra
+  clientId: string; // ID del cliente (para referencia rápida)
+  clientName: string; // Nombre del cliente (para referencia rápida)
   items: RentalItem[];
   totalPrice: number;
   returnDate: string;
@@ -31,5 +33,16 @@ export interface Client {
   email: string;
   phone: string;
   address: string;
+}
+
+export interface Obra {
+  id: string;
+  clientId: string;
+  clientName: string; // Para referencia rápida
+  name: string;
+  description?: string;
+  address?: string;
+  status: 'active' | 'completed' | 'paused';
+  createdAt: string;
 }
 

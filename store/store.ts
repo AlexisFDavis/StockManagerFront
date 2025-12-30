@@ -1,34 +1,40 @@
 import { create } from 'zustand';
-import { Product, Rental, Client, RentalItem } from '@/types';
+import { Product, Rental, Client, RentalItem, Obra } from '@/types';
 
 interface StoreState {
-  // Products
   products: Product[];
   addProduct: (product: Omit<Product, 'id'>) => void;
   updateProduct: (id: string, product: Partial<Product>) => void;
   deleteProduct: (id: string) => void;
   updateStock: (id: string, quantity: number) => void;
   
-  // Clients
   clients: Client[];
   addClient: (client: Omit<Client, 'id'>) => void;
   updateClient: (id: string, client: Partial<Client>) => void;
   deleteClient: (id: string) => void;
   
-  // Rentals
+  obras: Obra[];
+  addObra: (obra: Omit<Obra, 'id' | 'createdAt'>) => void;
+  updateObra: (id: string, obra: Partial<Obra>) => void;
+  deleteObra: (id: string) => void;
+  
   rentals: Rental[];
   addRental: (rental: Omit<Rental, 'id' | 'createdAt'>) => void;
   updateRental: (id: string, rental: Partial<Rental>) => void;
   returnRental: (id: string) => void;
   partialReturn: (rentalId: string, itemsToReturn: { productId: string; quantity: number }[]) => void;
   
-  // Auth
   isAuthenticated: boolean;
   login: () => void;
   logout: () => void;
+  
+  isSidebarOpen: boolean;
+  toggleSidebar: () => void;
+  closeSidebar: () => void;
+  openSidebar: () => void;
+  setIsSidebarOpen: (open: boolean) => void;
 }
 
-// Datos mock iniciales
 const initialProducts: Product[] = [
   {
     id: '1',
@@ -91,9 +97,54 @@ const initialClients: Client[] = [
   },
 ];
 
+const initialObras: Obra[] = [
+  {
+    id: '1',
+    clientId: '1',
+    clientName: 'Constructora ABC S.A.',
+    name: 'Edificio Residencial Palermo',
+    description: 'Construcción de edificio residencial de 12 pisos',
+    address: 'Av. Santa Fe 2000, Palermo, CABA',
+    status: 'active',
+    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: '2',
+    clientId: '1',
+    clientName: 'Constructora ABC S.A.',
+    name: 'Obra Comercial Microcentro',
+    description: 'Remodelación de local comercial',
+    address: 'Av. Corrientes 1500, Microcentro, CABA',
+    status: 'active',
+    createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: '3',
+    clientId: '2',
+    clientName: 'Obras y Proyectos SRL',
+    name: 'Casa Individual San Isidro',
+    description: 'Construcción de casa individual',
+    address: 'Av. del Libertador 3000, San Isidro',
+    status: 'active',
+    createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: '4',
+    clientId: '3',
+    clientName: 'Juan Pérez',
+    name: 'Reforma Cocina',
+    description: 'Reforma integral de cocina',
+    address: 'Calle Falsa 123, Buenos Aires',
+    status: 'active',
+    createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
 const initialRentals: Rental[] = [
   {
     id: '1',
+    workId: '1',
+    workName: 'Edificio Residencial Palermo',
     clientId: '1',
     clientName: 'Constructora ABC S.A.',
     items: [
@@ -119,6 +170,8 @@ const initialRentals: Rental[] = [
   },
   {
     id: '2',
+    workId: '3',
+    workName: 'Casa Individual San Isidro',
     clientId: '2',
     clientName: 'Obras y Proyectos SRL',
     items: [
@@ -140,10 +193,10 @@ const initialRentals: Rental[] = [
 export const useStore = create<StoreState>((set: any) => ({
   products: initialProducts,
   clients: initialClients,
+  obras: initialObras,
   rentals: initialRentals,
   isAuthenticated: false,
   
-  // Products
   addProduct: (product) => {
     const newProduct: Product = {
       ...product,
@@ -176,7 +229,6 @@ export const useStore = create<StoreState>((set: any) => ({
     }));
   },
   
-  // Clients
   addClient: (client) => {
     const newClient: Client = {
       ...client,
@@ -201,15 +253,60 @@ export const useStore = create<StoreState>((set: any) => ({
     }));
   },
   
-  // Rentals
-  addRental: (rental) => {
-    const newRental: Rental = {
-      ...rental,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-    };
-    
+  addObra: (obra) => {
     set((state: any) => {
+      const client = state.clients.find((c: any) => c.id === obra.clientId);
+      const newObra: Obra = {
+        ...obra,
+        clientName: client?.name || '',
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+      };
+      return {
+        obras: [...state.obras, newObra],
+      };
+    });
+  },
+  
+  updateObra: (id, obra) => {
+    set((state: any) => {
+      const updatedObras = state.obras.map((o: any) => {
+        if (o.id === id) {
+          const updated = { ...o, ...obra };
+          if (obra.clientId) {
+            const client = state.clients.find((c: any) => c.id === obra.clientId);
+            if (client) {
+              updated.clientName = client.name;
+            }
+          }
+          return updated;
+        }
+        return o;
+      });
+      return { obras: updatedObras };
+    });
+  },
+  
+  deleteObra: (id) => {
+    set((state: any) => ({
+      obras: state.obras.filter((o: any) => o.id !== id),
+    }));
+  },
+  
+  addRental: (rental) => {
+    set((state: any) => {
+      const obra = state.obras.find((o: any) => o.id === rental.workId);
+      if (!obra) return state;
+      
+      const newRental: Rental = {
+        ...rental,
+        clientId: obra.clientId,
+        clientName: obra.clientName,
+        workName: obra.name,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+      };
+      
       const updatedProducts = state.products.map((product: any) => {
         const item = rental.items.find((i: any) => i.productId === product.id);
         if (item) {
@@ -261,13 +358,11 @@ export const useStore = create<StoreState>((set: any) => ({
     });
   },
   
-  // Devolución parcial
   partialReturn: (rentalId, itemsToReturn) => {
     set((state: any) => {
       const rental = state.rentals.find((r: any) => r.id === rentalId);
       if (!rental || rental.status === 'returned') return state;
       
-      // Devolver stock de los items parciales
       const updatedProducts = state.products.map((product: any) => {
         const returnItem = itemsToReturn.find((i) => i.productId === product.id);
         if (returnItem) {
@@ -279,7 +374,6 @@ export const useStore = create<StoreState>((set: any) => ({
         return product;
       });
       
-      // Actualizar items del alquiler
       const updatedItems = rental.items
         .map((item: RentalItem) => {
           const returnItem = itemsToReturn.find((i) => i.productId === item.productId);
@@ -296,7 +390,6 @@ export const useStore = create<StoreState>((set: any) => ({
         })
         .filter(Boolean) as RentalItem[];
       
-      // Si no quedan items, marcar como devuelto
       const newStatus = updatedItems.length === 0 ? 'returned' : 'active';
       const newTotalPrice = updatedItems.reduce((sum: number, item: RentalItem) => sum + item.totalPrice, 0);
       
@@ -311,7 +404,12 @@ export const useStore = create<StoreState>((set: any) => ({
     });
   },
   
-  // Auth
   login: () => set({ isAuthenticated: true }),
   logout: () => set({ isAuthenticated: false }),
+  
+  isSidebarOpen: true,
+  toggleSidebar: () => set((state: any) => ({ isSidebarOpen: !state.isSidebarOpen })),
+  closeSidebar: () => set({ isSidebarOpen: false }),
+  openSidebar: () => set({ isSidebarOpen: true }),
+  setIsSidebarOpen: (open: boolean) => set({ isSidebarOpen: open }),
 }));

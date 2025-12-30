@@ -22,7 +22,6 @@ export default function ReportesAlquileresPage() {
   const clients = useStore((state: any) => state.clients);
   const products = useStore((state: any) => state.products);
 
-  // Filtros
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
@@ -40,7 +39,6 @@ export default function ReportesAlquileresPage() {
     });
   }, [rentals, searchText, statusFilter, dateFrom, dateTo]);
 
-  // KPIs
   const totalRentals = rentals.length;
   const activeRentals = rentals.filter((r: any) => r.status === 'active').length;
   const totalRevenue = rentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
@@ -48,14 +46,12 @@ export default function ReportesAlquileresPage() {
   const overdueRentals = rentals.filter((r: any) => r.status === 'active' && new Date(r.returnDate) < new Date()).length;
   const returnedRentals = rentals.filter((r: any) => r.status === 'returned').length;
 
-  // Datos para gráficos
   const statusDistribution = [
     { name: 'Activos', value: activeRentals },
     { name: 'Devueltos', value: returnedRentals },
     { name: 'Vencidos', value: overdueRentals },
   ];
 
-  // Ingresos por mes
   const monthlyRevenue = useMemo(() => {
     const last6Months: Record<string, number> = {};
     for (let i = 5; i >= 0; i--) {
@@ -75,7 +71,6 @@ export default function ReportesAlquileresPage() {
     }));
   }, [rentals]);
 
-  // Alquileres por mes
   const monthlyRentals = useMemo(() => {
     const last6Months: Record<string, number> = {};
     for (let i = 5; i >= 0; i--) {
@@ -95,7 +90,6 @@ export default function ReportesAlquileresPage() {
     }));
   }, [rentals]);
 
-  // Top clientes
   const topClients = useMemo(() => {
     const clientStats: Record<string, { name: string; count: number; total: number }> = {};
     rentals.forEach((r: any) => {
@@ -115,7 +109,6 @@ export default function ReportesAlquileresPage() {
       }));
   }, [rentals]);
 
-  // Productos más rentables
   const topProducts = useMemo(() => {
     const productStats: Record<string, { name: string; revenue: number }> = {};
     rentals.forEach((r: any) => {
@@ -137,13 +130,11 @@ export default function ReportesAlquileresPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <Title className="text-3xl font-bold text-gray-900">Reportes de Alquileres</Title>
         <Text className="text-gray-500 mt-1">Análisis de rendimiento y tendencias</Text>
       </div>
 
-      {/* Filtros */}
       <Card className="shadow-sm border border-gray-200">
         <div className="mb-3">
           <Text className="text-sm font-semibold text-gray-700">Filtros de Búsqueda</Text>
@@ -191,7 +182,6 @@ export default function ReportesAlquileresPage() {
         </div>
       </Card>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card decoration="top" decorationColor="blue" className="shadow-sm">
           <Text className="text-gray-500 text-xs">Total</Text>
@@ -219,7 +209,6 @@ export default function ReportesAlquileresPage() {
         </Card>
       </div>
 
-      {/* Gráficos principales */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="shadow-sm">
           <Title className="text-lg font-bold mb-4">Ingresos Mensuales</Title>
@@ -296,7 +285,6 @@ export default function ReportesAlquileresPage() {
         </Card>
       </div>
 
-      {/* Tabla de alquileres filtrados */}
       <Card className="shadow-sm">
         <Title className="text-lg font-bold mb-4">Detalle de Alquileres ({filteredRentals.length})</Title>
         {filteredRentals.length === 0 ? (

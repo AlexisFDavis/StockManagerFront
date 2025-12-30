@@ -2,3 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Centrar modales verticalmente y oscurecer backdrop - estilo Tailwind como ejemplo */
+div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(2px);
+  padding: 1rem !important;
+}
+
+/* El contenedor flex interno debe ocupar todo el espacio y centrar */
+div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] > div[class*="flex"] {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  min-height: calc(100vh - 2rem) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* El panel del modal debe estar centrado */
+div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] > div[class*="flex"] > div[id*="headlessui-dialog-panel"],
+div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] > div[class*="flex"] > div[class*="tremor-dialog-panel"] {
+  margin: 0 !important;
+  position: relative !important;
+  align-self: center !important;
+  top: 0 !important;
+  left: 0 !important;
+  transform: none !important;
+}
+
+/* Padding para inputs de Tremor */
+.tremor-TextInput-input,
+.tremor-Textarea-textarea,
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="date"],
+input[type="password"],
+textarea,
+select {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+

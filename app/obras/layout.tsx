@@ -6,7 +6,7 @@ import { useStore } from '@/store/store';
 import Sidebar from '@/components/Sidebar';
 import PageHeader from '@/components/PageHeader';
 
-export default function AlquileresLayout({
+export default function ObrasLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -28,7 +28,7 @@ export default function AlquileresLayout({
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
-        <PageHeader title="Alquileres" />
+        <PageHeader title="Obras" />
         <div className="p-4 md:p-8">
           {children}
         </div>

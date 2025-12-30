@@ -13,14 +13,13 @@ export default function LoginPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Autenticación simulada - cualquier credencial funciona
     login();
     router.push('/dashboard');
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="max-w-md w-full">
+      <Card className="max-w-md w-full shadow-2xl rounded-2xl">
         <Title className="text-2xl mb-6 text-center">Stock Manager</Title>
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
@@ -33,6 +32,7 @@ export default function LoginPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
+              className="rounded-xl"
             />
           </div>
           <div>
@@ -46,9 +46,10 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              className="rounded-xl"
             />
           </div>
-          <Button type="submit" className="w-full" size="lg">
+          <Button type="submit" className="w-full rounded-xl shadow-md hover:shadow-lg transition-shadow" size="lg">
             Iniciar Sesión
           </Button>
         </form>

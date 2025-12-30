@@ -19,7 +19,6 @@ export default function DashboardPage() {
   const rentals = useStore((state: any) => state.rentals);
   const clients = useStore((state: any) => state.clients);
 
-  // Filtros
   const [searchText, setSearchText] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
   
@@ -114,13 +113,11 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div>
         <Title className="text-3xl font-bold text-gray-900">Dashboard</Title>
         <Text className="text-gray-500 mt-1">Resumen general del sistema</Text>
       </div>
       
-      {/* Main KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card decoration="top" decorationColor="blue" className="shadow-sm">
           <Text className="text-gray-500 text-sm">Alquileres Activos</Text>
@@ -147,7 +144,6 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Alerts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <Card className="shadow-sm border-l-4 border-l-red-500">
           <div className="flex items-center justify-between">
@@ -190,7 +186,6 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="shadow-sm">
           <Title className="text-lg font-bold mb-4">Productos Más Alquilados</Title>
@@ -230,8 +225,7 @@ export default function DashboardPage() {
           )}
         </Card>
       </div>
-      
-      {/* Active Rentals List with Filters */}
+
       <Card className="shadow-sm">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
           <Title className="text-lg font-bold">Alquileres Activos</Title>
@@ -298,7 +292,6 @@ export default function DashboardPage() {
         )}
       </Card>
 
-      {/* Stock Alerts */}
       {(lowStockProducts.length > 0 || outOfStockProducts.length > 0) && (
         <Card className="shadow-sm bg-amber-50 border border-amber-200">
           <Title className="text-lg font-bold mb-4 text-amber-800">⚠️ Alertas de Stock</Title>

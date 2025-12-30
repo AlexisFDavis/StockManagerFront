@@ -20,11 +20,9 @@ export default function ReportesClientesPage() {
   const clients = useStore((state: any) => state.clients);
   const rentals = useStore((state: any) => state.rentals);
 
-  // Filtros
   const [searchText, setSearchText] = useState('');
   const [activityFilter, setActivityFilter] = useState('all');
 
-  // Estadísticas por cliente
   const clientStats = useMemo(() => {
     return clients.map((client: Client) => {
       const clientRentals = rentals.filter((r: any) => r.clientId === client.id);
@@ -56,7 +54,6 @@ export default function ReportesClientesPage() {
     });
   }, [clientStats, searchText, activityFilter]);
 
-  // KPIs
   const totalClients = clients.length;
   const clientsWithActiveRentals = clientStats.filter((c: any) => c.activeRentals > 0).length;
   const totalRevenue = rentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
@@ -64,7 +61,6 @@ export default function ReportesClientesPage() {
   const clientsWithRentals = clientStats.filter((c: any) => c.totalRentals > 0).length;
   const newClients = clientStats.filter((c: any) => c.totalRentals === 0).length;
 
-  // Datos para gráficos
   const topClientsByRevenue = useMemo(() => {
     return [...clientStats]
       .sort((a: any, b: any) => b.totalSpent - a.totalSpent)
@@ -106,13 +102,11 @@ export default function ReportesClientesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <Title className="text-3xl font-bold text-gray-900">Reportes de Clientes</Title>
         <Text className="text-gray-500 mt-1">Análisis de clientes y comportamiento</Text>
       </div>
 
-      {/* Filtros */}
       <Card className="shadow-sm border border-gray-200">
         <div className="mb-3">
           <Text className="text-sm font-semibold text-gray-700">Filtros de Búsqueda</Text>
@@ -143,7 +137,6 @@ export default function ReportesClientesPage() {
         </div>
       </Card>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card decoration="top" decorationColor="blue" className="shadow-sm">
           <Text className="text-gray-500 text-xs">Total Clientes</Text>
@@ -171,7 +164,6 @@ export default function ReportesClientesPage() {
         </Card>
       </div>
 
-      {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="shadow-sm">
           <Title className="text-lg font-bold mb-4">Top Clientes por Ingresos</Title>
@@ -231,7 +223,6 @@ export default function ReportesClientesPage() {
         </Card>
       </div>
 
-      {/* Tabla de clientes */}
       <Card className="shadow-sm">
         <Title className="text-lg font-bold mb-4">Detalle de Clientes ({filteredClients.length})</Title>
         {filteredClients.length === 0 ? (

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/store';
 import Sidebar from '@/components/Sidebar';
+import PageHeader from '@/components/PageHeader';
 
 export default function ReportesClientesLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -22,8 +23,11 @@ export default function ReportesClientesLayout({ children }: { children: React.R
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto p-8">
-        {children}
+      <main className="flex-1 overflow-y-auto">
+        <PageHeader title="Reportes de Clientes" />
+        <div className="p-4 md:p-8">
+          {children}
+        </div>
       </main>
     </div>
   );

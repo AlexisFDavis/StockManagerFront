@@ -7,8 +7,6 @@ import {
   Title,
   Text,
   TextInput,
-  Dialog,
-  DialogPanel,
   Badge,
   Metric,
   Select,
@@ -19,6 +17,7 @@ import { format } from 'date-fns';
 
 export default function ClientesPage() {
   const clients = useStore((state: any) => state.clients);
+  const obras = useStore((state: any) => state.obras);
   const rentals = useStore((state: any) => state.rentals);
   const addClient = useStore((state: any) => state.addClient);
   const updateClient = useStore((state: any) => state.updateClient);
@@ -29,7 +28,6 @@ export default function ClientesPage() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', address: '' });
 
-  // Filtros
   const [searchText, setSearchText] = useState('');
   const [activityFilter, setActivityFilter] = useState('all');
 
@@ -56,12 +54,16 @@ export default function ClientesPage() {
     });
   }, [clientStats, searchText, activityFilter]);
 
+  const clientObras = useMemo(() => {
+    if (!selectedClientId) return [];
+    return obras.filter((o: any) => o.clientId === selectedClientId);
+  }, [obras, selectedClientId]);
+
   const clientRentals = useMemo(() => {
     if (!selectedClientId) return [];
     return rentals.filter((r: any) => r.clientId === selectedClientId);
   }, [rentals, selectedClientId]);
 
-  // KPIs
   const totalClients = clients.length;
   const clientsWithActiveRentals = useMemo(() => {
     const activeClientIds = new Set(rentals.filter((r: any) => r.status === 'active').map((r: any) => r.clientId));
@@ -95,7 +97,6 @@ export default function ClientesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <Title className="text-3xl font-bold text-gray-900">Clientes</Title>
@@ -110,7 +111,6 @@ export default function ClientesPage() {
         </button>
       </div>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card decoration="top" decorationColor="blue" className="shadow-sm">
           <Text className="text-gray-500 text-sm">Total Clientes</Text>
@@ -130,7 +130,6 @@ export default function ClientesPage() {
         </Card>
       </div>
 
-      {/* Filtros */}
       <Card className="shadow-sm border border-gray-200">
         <div className="mb-3">
           <Text className="text-sm font-semibold text-gray-700">Filtros de Búsqueda</Text>
@@ -150,7 +149,7 @@ export default function ClientesPage() {
             <select
               value={activityFilter}
               onChange={(e) => setActivityFilter(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+              className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all shadow-sm"
             >
               <option value="all">Todos</option>
               <option value="active">Con alquileres activos</option>
@@ -160,11 +159,9 @@ export default function ClientesPage() {
         </div>
       </Card>
 
-      {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Client List */}
         <div className="lg:col-span-1">
-          <Card className="shadow-sm">
+          <Card className="shadow-md rounded-2xl">
             <Title className="text-lg font-bold mb-4">Lista de Clientes</Title>
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
               {filteredClients.map((client: any) => (
@@ -202,9 +199,8 @@ export default function ClientesPage() {
           </Card>
         </div>
 
-        {/* Client Details */}
         <div className="lg:col-span-2">
-          <Card className="shadow-sm h-full">
+          <Card className="shadow-md rounded-2xl h-full">
             {selectedClient ? (
               <div className="space-y-6">
                 <div className="flex justify-between items-start">
@@ -217,7 +213,7 @@ export default function ClientesPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => openEditDialog(selectedClient)} className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg">Editar</button>
+                    <button onClick={() => openEditDialog(selectedClient)} className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md">Editar</button>
                     <button
                       onClick={() => {
                         if (confirm('¿Eliminar este cliente?')) {
@@ -225,21 +221,20 @@ export default function ClientesPage() {
                           setSelectedClientId(null);
                         }
                       }}
-                      className="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg"
+                      className="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all shadow-sm hover:shadow-md"
                     >
                       Eliminar
                     </button>
                   </div>
                 </div>
 
-                {/* Stats */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-blue-50 rounded-lg p-3 text-center">
-                    <Text className="text-blue-600 text-xs">Total Alquileres</Text>
-                    <Text className="text-xl font-bold text-blue-700">{selectedClient.totalRentals}</Text>
+                    <Text className="text-blue-600 text-xs">Obras</Text>
+                    <Text className="text-xl font-bold text-blue-700">{clientObras.length}</Text>
                   </div>
                   <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <Text className="text-green-600 text-xs">Activos</Text>
+                    <Text className="text-green-600 text-xs">Alquileres Activos</Text>
                     <Text className="text-xl font-bold text-green-700">{selectedClient.activeRentals}</Text>
                   </div>
                   <div className="bg-indigo-50 rounded-lg p-3 text-center">
@@ -248,7 +243,36 @@ export default function ClientesPage() {
                   </div>
                 </div>
 
-                {/* Rental History */}
+                <div>
+                  <Title className="text-lg font-bold mb-3">Obras</Title>
+                  {clientObras.length === 0 ? (
+                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                      <Text className="text-gray-500">Sin obras registradas</Text>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {clientObras.map((obra: any) => (
+                        <div key={obra.id} className="border border-gray-200 rounded-xl p-3 shadow-sm">
+                          <div className="flex justify-between items-start mb-1">
+                            <div>
+                              <Text className="font-medium text-sm">{obra.name}</Text>
+                              {obra.description && (
+                                <Text className="text-xs text-gray-500 mt-0.5">{obra.description}</Text>
+                              )}
+                            </div>
+                            <Badge color={obra.status === 'active' ? 'green' : obra.status === 'completed' ? 'gray' : 'yellow'} size="sm">
+                              {obra.status === 'active' ? 'Activa' : obra.status === 'completed' ? 'Finalizada' : 'Pausada'}
+                            </Badge>
+                          </div>
+                          {obra.address && (
+                            <Text className="text-xs text-gray-600">📍 {obra.address}</Text>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <Title className="text-lg font-bold mb-3">Historial de Alquileres</Title>
                   {clientRentals.length === 0 ? (
@@ -258,11 +282,11 @@ export default function ClientesPage() {
                   ) : (
                     <div className="space-y-2 max-h-64 overflow-y-auto">
                       {clientRentals.map((rental: any) => (
-                        <div key={rental.id} className="border border-gray-200 rounded-lg p-3">
+                        <div key={rental.id} className="border border-gray-200 rounded-xl p-3 shadow-sm">
                           <div className="flex justify-between items-start mb-2">
                             <div>
-                              <Text className="font-medium text-sm">#{rental.id.slice(-6)}</Text>
-                              <Text className="text-xs text-gray-500">{format(new Date(rental.createdAt), 'dd/MM/yyyy')}</Text>
+                              <Text className="font-medium text-sm">{rental.workName}</Text>
+                              <Text className="text-xs text-gray-500">#{rental.id.slice(-6)} - {format(new Date(rental.createdAt), 'dd/MM/yyyy')}</Text>
                             </div>
                             <Badge color={rental.status === 'active' ? 'green' : 'gray'} size="sm">
                               {rental.status === 'active' ? 'Activo' : 'Devuelto'}
@@ -295,11 +319,25 @@ export default function ClientesPage() {
         </div>
       </div>
 
-      {/* Dialog */}
-      <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} static={true}>
-        <DialogPanel className="max-w-md">
-          <Title className="text-xl font-bold mb-6">{editingClient ? 'Editar Cliente' : 'Nuevo Cliente'}</Title>
-          <form onSubmit={handleSubmit} className="space-y-4">
+      {isDialogOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+          style={{ 
+            minHeight: '100vh',
+            height: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsDialogOpen(false);
+            }
+          }}
+        >
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6">
+            <Title className="text-xl font-bold mb-6">{editingClient ? `Edición de ${editingClient.name}` : 'Nuevo Cliente'}</Title>
+            <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
               <TextInput value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Nombre completo o razón social" required />
@@ -317,12 +355,13 @@ export default function ClientesPage() {
               <TextInput value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} placeholder="Dirección completa" required />
             </div>
             <div className="flex justify-end gap-3 pt-4 border-t">
-              <button type="button" onClick={() => setIsDialogOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg">Cancelar</button>
-              <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg">{editingClient ? 'Guardar' : 'Crear'}</button>
+              <button type="button" onClick={() => setIsDialogOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md">Cancelar</button>
+              <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md hover:shadow-lg">{editingClient ? 'Guardar' : 'Crear'}</button>
             </div>
           </form>
-        </DialogPanel>
-      </Dialog>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
