@@ -14,14 +14,21 @@ interface StoreState {
   deleteClient: (id: string) => void;
   
   obras: Obra[];
-  addObra: (obra: Omit<Obra, 'id' | 'createdAt'>) => void;
+  addObra: (obra: Omit<Obra, 'id' | 'createdAt' | 'totalPrice' | 'pagado' | 'resto'>) => void;
   updateObra: (id: string, obra: Partial<Obra>) => void;
+  updateObraPayment: (id: string, pagado: number) => void;
+  finishObra: (id: string) => void;
+  pauseObra: (id: string) => void;
+  reactivateObra: (id: string) => void;
   deleteObra: (id: string) => void;
   
   rentals: Rental[];
-  addRental: (rental: Omit<Rental, 'id' | 'createdAt'>) => void;
+  addRental: (rental: Omit<Rental, 'id' | 'createdAt' | 'totalPrice' | 'pagado' | 'resto'>) => void;
   updateRental: (id: string, rental: Partial<Rental>) => void;
+  updateRentalItems: (id: string, items: RentalItem[]) => void;
+  updateRentalPayment: (id: string, pagado: number) => void;
   returnRental: (id: string) => void;
+  reactivateRental: (id: string) => void;
   partialReturn: (rentalId: string, itemsToReturn: { productId: string; quantity: number }[]) => void;
   
   isAuthenticated: boolean;
@@ -40,35 +47,40 @@ const initialProducts: Product[] = [
     id: '1',
     name: 'Martillo de construcción',
     description: 'Martillo profesional para construcción, mango de fibra de vidrio',
-    stock: 50,
+    stockTotal: 50,
+    stockActual: 30,
     price: 200,
   },
   {
     id: '2',
     name: 'Taladro eléctrico',
     description: 'Taladro percutor 750W con maletín y accesorios',
-    stock: 30,
+    stockTotal: 30,
+    stockActual: 25,
     price: 500,
   },
   {
     id: '3',
     name: 'Andamio modular',
     description: 'Andamio de 2x1 metros, altura ajustable',
-    stock: 15,
+    stockTotal: 15,
+    stockActual: 12,
     price: 1200,
   },
   {
     id: '4',
     name: 'Carretilla',
     description: 'Carretilla de construcción, capacidad 100L',
-    stock: 25,
+    stockTotal: 25,
+    stockActual: 25,
     price: 350,
   },
   {
     id: '5',
     name: 'Nivel láser',
     description: 'Nivel láser rotativo profesional, alcance 50m',
-    stock: 8,
+    stockTotal: 8,
+    stockActual: 8,
     price: 800,
   },
 ];
@@ -105,6 +117,9 @@ const initialObras: Obra[] = [
     name: 'Edificio Residencial Palermo',
     description: 'Construcción de edificio residencial de 12 pisos',
     address: 'Av. Santa Fe 2000, Palermo, CABA',
+    totalPrice: 6500,
+    pagado: 3000,
+    resto: 3500,
     status: 'active',
     createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -115,6 +130,9 @@ const initialObras: Obra[] = [
     name: 'Obra Comercial Microcentro',
     description: 'Remodelación de local comercial',
     address: 'Av. Corrientes 1500, Microcentro, CABA',
+    totalPrice: 0,
+    pagado: 0,
+    resto: 0,
     status: 'active',
     createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -125,6 +143,9 @@ const initialObras: Obra[] = [
     name: 'Casa Individual San Isidro',
     description: 'Construcción de casa individual',
     address: 'Av. del Libertador 3000, San Isidro',
+    totalPrice: 3600,
+    pagado: 0,
+    resto: 3600,
     status: 'active',
     createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -135,6 +156,9 @@ const initialObras: Obra[] = [
     name: 'Reforma Cocina',
     description: 'Reforma integral de cocina',
     address: 'Calle Falsa 123, Buenos Aires',
+    totalPrice: 0,
+    pagado: 0,
+    resto: 0,
     status: 'active',
     createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -164,6 +188,8 @@ const initialRentals: Rental[] = [
       },
     ],
     totalPrice: 6500,
+    pagado: 3000,
+    resto: 3500,
     returnDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     status: 'active',
@@ -184,6 +210,8 @@ const initialRentals: Rental[] = [
       },
     ],
     totalPrice: 3600,
+    pagado: 0,
+    resto: 3600,
     returnDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
     status: 'active',
@@ -201,6 +229,7 @@ export const useStore = create<StoreState>((set: any) => ({
     const newProduct: Product = {
       ...product,
       id: Date.now().toString(),
+      stockActual: product.stockTotal || 0,
     };
     set((state: any) => ({
       products: [...state.products, newProduct],
@@ -222,11 +251,24 @@ export const useStore = create<StoreState>((set: any) => ({
   },
   
   updateStock: (id, quantity) => {
-    set((state: any) => ({
-      products: state.products.map((p: any) =>
-        p.id === id ? { ...p, stock: Math.max(0, p.stock + quantity) } : p
-      ),
-    }));
+    set((state: any) => {
+      const activeRentals = state.rentals.filter((r: any) => r.status === 'active');
+      const productRented = activeRentals.reduce((sum: number, rental: any) => {
+        const item = rental.items.find((i: any) => i.productId === id);
+        return sum + (item ? item.quantity : 0);
+      }, 0);
+      
+      return {
+        products: state.products.map((p: any) => {
+          if (p.id === id) {
+            const newStockTotal = Math.max(0, p.stockTotal + quantity);
+            const newStockActual = Math.max(0, newStockTotal - productRented);
+            return { ...p, stockTotal: newStockTotal, stockActual: newStockActual };
+          }
+          return p;
+        }),
+      };
+    });
   },
   
   addClient: (client) => {
@@ -259,6 +301,9 @@ export const useStore = create<StoreState>((set: any) => ({
       const newObra: Obra = {
         ...obra,
         clientName: client?.name || '',
+        totalPrice: 0,
+        pagado: 0,
+        resto: 0,
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
       };
@@ -286,6 +331,117 @@ export const useStore = create<StoreState>((set: any) => ({
       return { obras: updatedObras };
     });
   },
+
+  updateObraPayment: (id, pagado) => {
+    set((state: any) => ({
+      obras: state.obras.map((o: any) => {
+        if (o.id === id) {
+          return {
+            ...o,
+            pagado: Math.max(0, Math.min(o.totalPrice, pagado)),
+            resto: o.totalPrice - Math.max(0, Math.min(o.totalPrice, pagado)),
+          };
+        }
+        return o;
+      }),
+    }));
+  },
+
+  finishObra: (id) => {
+    set((state: any) => {
+      const obra = state.obras.find((o: any) => o.id === id);
+      if (!obra) return state;
+
+      const obraRentals = state.rentals.filter((r: any) => r.workId === id && r.status === 'active');
+      
+      const updatedProducts = state.products.map((product: any) => {
+        let stockToReturn = 0;
+        obraRentals.forEach((rental: any) => {
+          const item = rental.items.find((i: any) => i.productId === product.id);
+          if (item) {
+            stockToReturn += item.quantity;
+          }
+        });
+        if (stockToReturn > 0) {
+          return {
+            ...product,
+            stockActual: Math.min(product.stockTotal, product.stockActual + stockToReturn),
+          };
+        }
+        return product;
+      });
+
+      const updatedRentals = state.rentals.map((r: any) => {
+        if (r.workId === id && r.status === 'active') {
+          return { ...r, status: 'returned' as const, pagado: r.totalPrice, resto: 0 };
+        }
+        return r;
+      });
+
+      const obraTotalPrice = obraRentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
+      const obraPagado = obraTotalPrice;
+      const obraResto = 0;
+
+      return {
+        obras: state.obras.map((o: any) =>
+          o.id === id
+            ? { ...o, status: 'completed' as const, totalPrice: obraTotalPrice, pagado: obraPagado, resto: obraResto }
+            : o
+        ),
+        rentals: updatedRentals,
+        products: updatedProducts,
+      };
+    });
+  },
+
+  pauseObra: (id) => {
+    set((state: any) => ({
+      obras: state.obras.map((o: any) =>
+        o.id === id ? { ...o, status: 'paused' as const } : o
+      ),
+    }));
+  },
+
+  reactivateObra: (id) => {
+    set((state: any) => {
+      const obra = state.obras.find((o: any) => o.id === id);
+      if (!obra || obra.status === 'active') return state;
+
+      const obraRentals = state.rentals.filter((r: any) => r.workId === id);
+      
+      const updatedProducts = state.products.map((product: any) => {
+        let stockNeeded = 0;
+        obraRentals.forEach((rental: any) => {
+          const item = rental.items.find((i: any) => i.productId === product.id);
+          if (item) {
+            stockNeeded += item.quantity;
+          }
+        });
+        if (stockNeeded > 0) {
+          return {
+            ...product,
+            stockActual: Math.max(0, product.stockActual - stockNeeded),
+          };
+        }
+        return product;
+      });
+
+      const updatedRentals = state.rentals.map((r: any) => {
+        if (r.workId === id && r.status === 'returned') {
+          return { ...r, status: 'active' as const };
+        }
+        return r;
+      });
+
+      return {
+        obras: state.obras.map((o: any) =>
+          o.id === id ? { ...o, status: 'active' as const } : o
+        ),
+        rentals: updatedRentals,
+        products: updatedProducts,
+      };
+    });
+  },
   
   deleteObra: (id) => {
     set((state: any) => ({
@@ -298,11 +454,18 @@ export const useStore = create<StoreState>((set: any) => ({
       const obra = state.obras.find((o: any) => o.id === rental.workId);
       if (!obra) return state;
       
+      const calculatedTotal = rental.items.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
+      const pagado = 0;
+      const resto = calculatedTotal;
+      
       const newRental: Rental = {
         ...rental,
         clientId: obra.clientId,
         clientName: obra.clientName,
         workName: obra.name,
+        totalPrice: calculatedTotal,
+        pagado: pagado,
+        resto: resto,
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
       };
@@ -312,24 +475,108 @@ export const useStore = create<StoreState>((set: any) => ({
         if (item) {
           return {
             ...product,
-            stock: Math.max(0, product.stock - item.quantity),
+            stockActual: Math.max(0, product.stockActual - item.quantity),
           };
         }
         return product;
       });
+
+      const obraRentals = [...state.rentals.filter((r: any) => r.workId === rental.workId), newRental];
+      const obraTotalPrice = obraRentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
+      const obraResto = obraTotalPrice - obra.pagado;
       
       return {
         rentals: [...state.rentals, newRental],
         products: updatedProducts,
+        obras: state.obras.map((o: any) =>
+          o.id === rental.workId
+            ? { ...o, totalPrice: obraTotalPrice, resto: obraResto }
+            : o
+        ),
       };
     });
   },
   
   updateRental: (id, rental) => {
     set((state: any) => ({
-      rentals: state.rentals.map((r: any) =>
-        r.id === id ? { ...r, ...rental } : r
-      ),
+      rentals: state.rentals.map((r: any) => {
+        if (r.id === id) {
+          const updated = { ...r, ...rental };
+          if (rental.pagado !== undefined) {
+            updated.resto = updated.totalPrice - updated.pagado;
+          }
+          return updated;
+        }
+        return r;
+      }),
+    }));
+  },
+
+  updateRentalItems: (id, items) => {
+    set((state: any) => {
+      const rental = state.rentals.find((r: any) => r.id === id);
+      if (!rental) return state;
+
+      const calculatedTotal = items.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
+      const resto = Math.max(0, calculatedTotal - rental.pagado);
+
+      const updatedProducts = state.products.map((product: any) => {
+        const oldItem = rental.items.find((i: any) => i.productId === product.id);
+        const newItem = items.find((i: any) => i.productId === product.id);
+        
+        let stockChange = 0;
+        if (oldItem && newItem) {
+          stockChange = oldItem.quantity - newItem.quantity;
+        } else if (oldItem) {
+          stockChange = oldItem.quantity;
+        } else if (newItem) {
+          stockChange = -newItem.quantity;
+        }
+
+        if (stockChange !== 0) {
+          return {
+            ...product,
+            stockActual: Math.max(0, Math.min(product.stockTotal, product.stockActual + stockChange)),
+          };
+        }
+        return product;
+      });
+
+      const updatedRentals = state.rentals.map((r: any) =>
+        r.id === id
+          ? { ...r, items, totalPrice: calculatedTotal, resto }
+          : r
+      );
+
+      const obraRentals = updatedRentals.filter((r: any) => r.workId === rental.workId);
+      const obraTotalPrice = obraRentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
+      const obra = state.obras.find((o: any) => o.id === rental.workId);
+      const obraResto = obra ? obraTotalPrice - obra.pagado : 0;
+
+      return {
+        rentals: updatedRentals,
+        products: updatedProducts,
+        obras: state.obras.map((o: any) =>
+          o.id === rental.workId
+            ? { ...o, totalPrice: obraTotalPrice, resto: obraResto }
+            : o
+        ),
+      };
+    });
+  },
+
+  updateRentalPayment: (id, pagado) => {
+    set((state: any) => ({
+      rentals: state.rentals.map((r: any) => {
+        if (r.id === id) {
+          return {
+            ...r,
+            pagado: Math.max(0, Math.min(r.totalPrice, pagado)),
+            resto: r.totalPrice - Math.max(0, Math.min(r.totalPrice, pagado)),
+          };
+        }
+        return r;
+      }),
     }));
   },
   
@@ -343,7 +590,7 @@ export const useStore = create<StoreState>((set: any) => ({
         if (item) {
           return {
             ...product,
-            stock: product.stock + item.quantity,
+            stockActual: Math.min(product.stockTotal, product.stockActual + item.quantity),
           };
         }
         return product;
@@ -351,7 +598,36 @@ export const useStore = create<StoreState>((set: any) => ({
       
       return {
         rentals: state.rentals.map((r: any) =>
-          r.id === id ? { ...r, status: 'returned' as const } : r
+          r.id === id 
+            ? { ...r, status: 'returned' as const, pagado: r.totalPrice, resto: 0 }
+            : r
+        ),
+        products: updatedProducts,
+      };
+    });
+  },
+
+  reactivateRental: (id) => {
+    set((state: any) => {
+      const rental = state.rentals.find((r: any) => r.id === id);
+      if (!rental || rental.status === 'active') return state;
+      
+      const updatedProducts = state.products.map((product: any) => {
+        const item = rental.items.find((i: any) => i.productId === product.id);
+        if (item) {
+          return {
+            ...product,
+            stockActual: Math.max(0, product.stockActual - item.quantity),
+          };
+        }
+        return product;
+      });
+      
+      return {
+        rentals: state.rentals.map((r: any) =>
+          r.id === id 
+            ? { ...r, status: 'active' as const }
+            : r
         ),
         products: updatedProducts,
       };
@@ -368,7 +644,7 @@ export const useStore = create<StoreState>((set: any) => ({
         if (returnItem) {
           return {
             ...product,
-            stock: product.stock + returnItem.quantity,
+            stockActual: Math.min(product.stockTotal, product.stockActual + returnItem.quantity),
           };
         }
         return product;
@@ -391,12 +667,11 @@ export const useStore = create<StoreState>((set: any) => ({
         .filter(Boolean) as RentalItem[];
       
       const newStatus = updatedItems.length === 0 ? 'returned' : 'active';
-      const newTotalPrice = updatedItems.reduce((sum: number, item: RentalItem) => sum + item.totalPrice, 0);
       
       return {
         rentals: state.rentals.map((r: any) =>
           r.id === rentalId
-            ? { ...r, items: updatedItems, totalPrice: newTotalPrice, status: newStatus }
+            ? { ...r, items: updatedItems, status: newStatus }
             : r
         ),
         products: updatedProducts,

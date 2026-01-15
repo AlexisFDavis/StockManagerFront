@@ -1,8 +1,106 @@
+/* stylelint-disable at-rule-no-unknown */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+/* stylelint-enable at-rule-no-unknown */
 
-/* Centrar modales verticalmente y oscurecer backdrop - estilo Tailwind como ejemplo */
+/* Colores vibrantes para gráficos de Tremor */
+:root {
+  --tremor-content-emphasis: #1f2937;
+  --tremor-content-default: #374151;
+  --tremor-content-subtle: #6b7280;
+}
+
+/* Colores de barras */
+.recharts-bar-rectangle path {
+  opacity: 0.9;
+}
+
+/* Colores específicos de Tremor */
+[data-tremor-id] .fill-cyan-500,
+.tremor-BarChart .fill-cyan-500,
+.recharts-bar .fill-cyan-500 {
+  fill: #06b6d4 !important;
+}
+
+[data-tremor-id] .fill-violet-500,
+.tremor-BarChart .fill-violet-500,
+.recharts-bar .fill-violet-500 {
+  fill: #8b5cf6 !important;
+}
+
+[data-tremor-id] .fill-fuchsia-500,
+.tremor-BarChart .fill-fuchsia-500,
+.recharts-bar .fill-fuchsia-500 {
+  fill: #d946ef !important;
+}
+
+[data-tremor-id] .fill-emerald-500,
+.tremor-BarChart .fill-emerald-500,
+.recharts-bar .fill-emerald-500 {
+  fill: #10b981 !important;
+}
+
+[data-tremor-id] .fill-amber-500,
+.tremor-BarChart .fill-amber-500,
+.recharts-bar .fill-amber-500 {
+  fill: #f59e0b !important;
+}
+
+[data-tremor-id] .fill-rose-500,
+.tremor-BarChart .fill-rose-500,
+.recharts-bar .fill-rose-500 {
+  fill: #f43f5e !important;
+}
+
+/* BarList colores */
+.tremor-BarList-bar {
+  opacity: 0.85;
+}
+
+/* DonutChart colores vibrantes */
+.recharts-pie-sector {
+  stroke-width: 2px;
+}
+
+/* Tooltip mejorado - con contraste */
+.recharts-tooltip-wrapper {
+  z-index: 1000 !important;
+}
+
+.recharts-default-tooltip {
+  background-color: #1f2937 !important;
+  border: 1px solid #374151 !important;
+  border-radius: 8px !important;
+  padding: 12px !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3) !important;
+}
+
+.recharts-tooltip-label {
+  color: #f9fafb !important;
+  font-weight: 600 !important;
+  margin-bottom: 6px !important;
+}
+
+.recharts-tooltip-item {
+  color: #e5e7eb !important;
+  padding: 2px 0 !important;
+}
+
+.recharts-tooltip-item-name {
+  color: #9ca3af !important;
+}
+
+.recharts-tooltip-item-value {
+  color: #f9fafb !important;
+  font-weight: 500 !important;
+}
+
+/* Leyenda con colores */
+.recharts-legend-item-text {
+  color: #374151 !important;
+}
+
 div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] {
   display: flex !important;
   align-items: center !important;
@@ -12,7 +110,6 @@ div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] {
   padding: 1rem !important;
 }
 
-/* El contenedor flex interno debe ocupar todo el espacio y centrar */
 div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] > div[class*="flex"] {
   display: flex !important;
   align-items: center !important;
@@ -23,7 +120,6 @@ div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] > div[class*
   padding: 0 !important;
 }
 
-/* El panel del modal debe estar centrado */
 div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] > div[class*="flex"] > div[id*="headlessui-dialog-panel"],
 div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] > div[class*="flex"] > div[class*="tremor-dialog-panel"] {
   margin: 0 !important;
@@ -34,7 +130,6 @@ div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] > div[class*
   transform: none !important;
 }
 
-/* Padding para inputs de Tremor */
 .tremor-TextInput-input,
 .tremor-Textarea-textarea,
 input[type="text"],
@@ -46,5 +141,22 @@ textarea,
 select {
   padding-left: 1rem !important;
   padding-right: 1rem !important;
+}
+
+div[class*="tremor-Card-root"] {
+  overflow: visible !important;
+}
+
+div[class*="tremor-ChartTooltip"] {
+  z-index: 60 !important;
+  background-color: #111827 !important;
+  color: #f9fafb !important;
+  border: 1px solid #1f2937 !important;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2) !important;
+  transform: translateY(-8px) !important;
+}
+
+div[class*="tremor-ChartTooltip"] * {
+  color: #f9fafb !important;
 }
 

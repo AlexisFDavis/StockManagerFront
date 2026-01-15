@@ -172,10 +172,11 @@ export default function ReportesClientesPage() {
               data={topClientsByRevenue}
               index="name"
               categories={['Ingresos']}
-              colors={['indigo']}
+              colors={['emerald']}
               valueFormatter={(n: number) => `$${n.toLocaleString()}`}
               yAxisWidth={64}
               className="h-72"
+              showAnimation={true}
             />
           ) : (
             <div className="h-72 flex items-center justify-center text-gray-500">Sin datos</div>
@@ -189,9 +190,10 @@ export default function ReportesClientesPage() {
               data={topClientsByRentals}
               index="name"
               categories={['Alquileres']}
-              colors={['teal']}
+              colors={['cyan']}
               yAxisWidth={32}
               className="h-72"
+              showAnimation={true}
             />
           ) : (
             <div className="h-72 flex items-center justify-center text-gray-500">Sin datos</div>
@@ -206,8 +208,10 @@ export default function ReportesClientesPage() {
             data={clientActivityDistribution}
             category="value"
             index="name"
-            colors={['green', 'gray', 'blue']}
+            colors={['emerald', 'slate', 'amber']}
             className="h-64"
+            showAnimation={true}
+            valueFormatter={(value: number) => `${value} clientes`}
           />
         </Card>
 
@@ -217,8 +221,10 @@ export default function ReportesClientesPage() {
             data={revenueDistribution}
             category="value"
             index="name"
-            colors={['emerald', 'blue', 'yellow', 'gray']}
+            colors={['emerald', 'cyan', 'amber', 'rose']}
             className="h-64"
+            showAnimation={true}
+            valueFormatter={(value: number) => `$${value.toLocaleString()}`}
           />
         </Card>
       </div>

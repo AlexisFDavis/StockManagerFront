@@ -18,9 +18,12 @@ export default function DashboardPage() {
   const products = useStore((state: any) => state.products);
   const rentals = useStore((state: any) => state.rentals);
   const clients = useStore((state: any) => state.clients);
+  const obras = useStore((state: any) => state.obras);
 
   const [searchText, setSearchText] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
+  const [timeFilterProducts, setTimeFilterProducts] = useState<'30days' | 'all'>('30days');
+  const [timeFilterClients, setTimeFilterClients] = useState<'30days' | 'all'>('30days');
   
   const activeRentals = useMemo(
     () => rentals.filter((r: any) => r.status === 'active'),
@@ -43,7 +46,12 @@ export default function DashboardPage() {
   }, [activeRentals, searchText, dateFilter]);
   
   const totalStock = useMemo(
-    () => products.reduce((sum: number, p: any) => sum + p.stock, 0),
+    () => products.reduce((sum: number, p: any) => sum + p.stockTotal, 0),
+    [products]
+  );
+
+  const stockActual = useMemo(
+    () => products.reduce((sum: number, p: any) => sum + p.stockActual, 0),
     [products]
   );
 
@@ -71,25 +79,32 @@ export default function DashboardPage() {
   }, [activeRentals]);
 
   const lowStockProducts = useMemo(
-    () => products.filter((p: any) => p.stock < 10 && p.stock > 0),
+    () => products.filter((p: any) => p.stockActual < 10 && p.stockActual > 0),
     [products]
   );
 
   const outOfStockProducts = useMemo(
-    () => products.filter((p: any) => p.stock === 0),
+    () => products.filter((p: any) => p.stockActual === 0),
     [products]
   );
 
   const stockDistribution = useMemo(() => {
     return products.map((p: any) => ({
       name: p.name,
-      value: p.stock,
+      value: p.stockTotal,
     }));
   }, [products]);
 
   const topProducts = useMemo(() => {
     const productCounts: { [key: string]: number } = {};
-    rentals.forEach((r: any) => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const filteredRentals = timeFilterProducts === '30days' 
+      ? rentals.filter((r: any) => new Date(r.createdAt) >= thirtyDaysAgo)
+      : rentals;
+    
+    filteredRentals.forEach((r: any) => {
       r.items.forEach((item: any) => {
         productCounts[item.productName] = (productCounts[item.productName] || 0) + item.quantity;
       });
@@ -98,18 +113,31 @@ export default function DashboardPage() {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-  }, [rentals]);
+  }, [rentals, timeFilterProducts]);
 
   const revenueByClient = useMemo(() => {
     const clientRevenue: { [key: string]: number } = {};
-    rentals.forEach((r: any) => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const filteredRentals = timeFilterClients === '30days' 
+      ? rentals.filter((r: any) => new Date(r.createdAt) >= thirtyDaysAgo)
+      : rentals;
+    
+    filteredRentals.forEach((r: any) => {
       clientRevenue[r.clientName] = (clientRevenue[r.clientName] || 0) + r.totalPrice;
     });
     return Object.entries(clientRevenue)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-  }, [rentals]);
+  }, [rentals, timeFilterClients]);
+
+  const obrasWithWarning = useMemo(() => {
+    return obras.filter((o: any) => 
+      o.status === 'active' && (o.resto || 0) === (o.totalPrice || 0) && (o.totalPrice || 0) > 0
+    );
+  }, [obras]);
 
   return (
     <div className="space-y-8">
@@ -118,7 +146,7 @@ export default function DashboardPage() {
         <Text className="text-gray-500 mt-1">Resumen general del sistema</Text>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card decoration="top" decorationColor="blue" className="shadow-sm">
           <Text className="text-gray-500 text-sm">Alquileres Activos</Text>
           <Metric className="text-3xl mt-2">{activeRentals.length}</Metric>
@@ -135,6 +163,12 @@ export default function DashboardPage() {
           <Text className="text-gray-500 text-sm">Stock Total</Text>
           <Metric className="text-3xl mt-2">{totalStock.toLocaleString()}</Metric>
           <Text className="text-gray-500 text-xs mt-2">{products.length} productos</Text>
+        </Card>
+        
+        <Card decoration="top" decorationColor="cyan" className="shadow-sm">
+          <Text className="text-gray-500 text-sm">Stock Actual</Text>
+          <Metric className="text-3xl mt-2">{stockActual.toLocaleString()}</Metric>
+          <Text className="text-gray-500 text-xs mt-2">Disponible</Text>
         </Card>
         
         <Card decoration="top" decorationColor="amber" className="shadow-sm">
@@ -188,21 +222,58 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="shadow-sm">
-          <Title className="text-lg font-bold mb-4">Productos Más Alquilados</Title>
+          <div className="flex justify-between items-center mb-4">
+            <Title className="text-lg font-bold">
+              Productos Más Alquilados
+              {timeFilterProducts === '30days' && (
+                <Text className="text-xs font-normal text-gray-500"> (Últimos 30 días)</Text>
+              )}
+            </Title>
+            <select
+              value={timeFilterProducts}
+              onChange={(e) => setTimeFilterProducts(e.target.value as '30days' | 'all')}
+              className="px-2 py-1 text-xs rounded-lg border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+            >
+              <option value="30days">30 días</option>
+              <option value="all">Histórico</option>
+            </select>
+          </div>
           {topProducts.length > 0 ? (
-            <BarList data={topProducts} className="mt-4" />
+            <BarList 
+              data={topProducts} 
+              className="mt-4"
+              color="cyan"
+              showAnimation={true}
+            />
           ) : (
             <Text className="text-gray-500 text-center py-8">Sin datos</Text>
           )}
         </Card>
 
         <Card className="shadow-sm">
-          <Title className="text-lg font-bold mb-4">Ingresos por Cliente</Title>
+          <div className="flex justify-between items-center mb-4">
+            <Title className="text-lg font-bold">
+              Ingresos por Cliente
+              {timeFilterClients === '30days' && (
+                <Text className="text-xs font-normal text-gray-500"> (Últimos 30 días)</Text>
+              )}
+            </Title>
+            <select
+              value={timeFilterClients}
+              onChange={(e) => setTimeFilterClients(e.target.value as '30days' | 'all')}
+              className="px-2 py-1 text-xs rounded-lg border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+            >
+              <option value="30days">30 días</option>
+              <option value="all">Histórico</option>
+            </select>
+          </div>
           {revenueByClient.length > 0 ? (
             <BarList
               data={revenueByClient}
               className="mt-4"
               valueFormatter={(value: number) => `$${value.toLocaleString()}`}
+              color="violet"
+              showAnimation={true}
             />
           ) : (
             <Text className="text-gray-500 text-center py-8">Sin datos</Text>
@@ -218,7 +289,8 @@ export default function DashboardPage() {
               index="name"
               valueFormatter={(value: number) => `${value} uds`}
               className="h-48"
-              colors={['blue', 'cyan', 'indigo', 'violet', 'purple']}
+              colors={['cyan', 'emerald', 'amber', 'rose', 'violet']}
+              showAnimation={true}
             />
           ) : (
             <Text className="text-gray-500 text-center py-8">Sin productos</Text>
@@ -303,7 +375,7 @@ export default function DashboardPage() {
                   {outOfStockProducts.map((product: any) => (
                     <div key={product.id} className="flex justify-between items-center p-2 bg-red-100 rounded">
                       <Text className="text-red-800">{product.name}</Text>
-                      <Badge color="red">0 uds</Badge>
+                      <Badge color="red">0 actual (Total: {product.stockTotal})</Badge>
                     </div>
                   ))}
                 </div>
@@ -316,12 +388,47 @@ export default function DashboardPage() {
                   {lowStockProducts.map((product: any) => (
                     <div key={product.id} className="flex justify-between items-center p-2 bg-yellow-100 rounded">
                       <Text className="text-yellow-800">{product.name}</Text>
-                      <Badge color="yellow">{product.stock} uds</Badge>
+                      <Badge color="yellow">{product.stockActual} actual (Total: {product.stockTotal})</Badge>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+          </div>
+        </Card>
+      )}
+
+      {obrasWithWarning.length > 0 && (
+        <Card className="shadow-sm">
+          <Title className="text-lg font-bold mb-4">⚠️ Obras con Resto Pendiente</Title>
+          <div className="space-y-3">
+            {obrasWithWarning.map((obra: any) => (
+              <div key={obra.id} className="border border-yellow-200 bg-yellow-50 rounded-lg p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <Text className="font-semibold text-sm text-gray-900">{obra.name}</Text>
+                    <Text className="text-xs text-gray-600 mt-1">{obra.clientName}</Text>
+                    <div className="mt-2 flex gap-4 text-xs">
+                      <div>
+                        <Text className="text-gray-500">Total:</Text>
+                        <Text className="font-semibold text-gray-900 ml-1">${(obra.totalPrice || 0).toLocaleString()}</Text>
+                      </div>
+                      <div>
+                        <Text className="text-gray-500">Pagado:</Text>
+                        <Text className="font-semibold text-green-600 ml-1">${(obra.pagado || 0).toLocaleString()}</Text>
+                      </div>
+                      <div>
+                        <Text className="text-gray-500">Resto:</Text>
+                        <Text className="font-semibold text-red-600 ml-1">${(obra.resto || 0).toLocaleString()}</Text>
+                      </div>
+                    </div>
+                  </div>
+                  <Badge color="yellow" size="sm">
+                    Pendiente
+                  </Badge>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       )}

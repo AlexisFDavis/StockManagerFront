@@ -29,34 +29,34 @@ export default function ReportesInventarioPage() {
         p.name.toLowerCase().includes(searchText.toLowerCase()) ||
         p.description.toLowerCase().includes(searchText.toLowerCase());
       let matchesStock = true;
-      if (stockFilter === 'low') matchesStock = p.stock > 0 && p.stock < 10;
-      if (stockFilter === 'out') matchesStock = p.stock === 0;
-      if (stockFilter === 'available') matchesStock = p.stock >= 10;
+      if (stockFilter === 'low') matchesStock = p.stockActual > 0 && p.stockActual < 10;
+      if (stockFilter === 'out') matchesStock = p.stockActual === 0;
+      if (stockFilter === 'available') matchesStock = p.stockActual >= 10;
       return matchesSearch && matchesStock;
     });
   }, [products, searchText, stockFilter]);
 
   const totalProducts = products.length;
-  const totalStock = products.reduce((sum: number, p: Product) => sum + p.stock, 0);
-  const totalValue = products.reduce((sum: number, p: Product) => sum + (p.stock * p.price), 0);
+  const totalStock = products.reduce((sum: number, p: Product) => sum + p.stockTotal, 0);
+  const totalValue = products.reduce((sum: number, p: Product) => sum + (p.stockTotal * p.price), 0);
   const avgPrice = products.length > 0 ? products.reduce((sum: number, p: Product) => sum + p.price, 0) / products.length : 0;
-  const lowStockProducts = products.filter((p: Product) => p.stock > 0 && p.stock < 10).length;
-  const outOfStockProducts = products.filter((p: Product) => p.stock === 0).length;
+  const lowStockProducts = products.filter((p: Product) => p.stockActual > 0 && p.stockActual < 10).length;
+  const outOfStockProducts = products.filter((p: Product) => p.stockActual === 0).length;
 
   const stockByProduct = filteredProducts.map((p: Product) => ({
     name: p.name.length > 15 ? p.name.substring(0, 15) + '...' : p.name,
-    Stock: p.stock,
+    Stock: p.stockActual,
   }));
 
   const valueByProduct = filteredProducts.map((p: Product) => ({
     name: p.name.length > 15 ? p.name.substring(0, 15) + '...' : p.name,
-    Valor: p.stock * p.price,
+    Valor: p.stockTotal * p.price,
   }));
 
   const stockDistribution = useMemo(() => {
-    const available = products.filter((p: Product) => p.stock >= 10).length;
-    const low = products.filter((p: Product) => p.stock > 0 && p.stock < 10).length;
-    const out = products.filter((p: Product) => p.stock === 0).length;
+    const available = products.filter((p: Product) => p.stockActual >= 10).length;
+    const low = products.filter((p: Product) => p.stockActual > 0 && p.stockActual < 10).length;
+    const out = products.filter((p: Product) => p.stockActual === 0).length;
     return [
       { name: 'Disponible (≥10)', value: available },
       { name: 'Bajo (<10)', value: low },
@@ -157,9 +157,10 @@ export default function ReportesInventarioPage() {
               data={stockByProduct}
               index="name"
               categories={['Stock']}
-              colors={['blue']}
+              colors={['cyan']}
               yAxisWidth={48}
               className="h-72"
+              showAnimation={true}
             />
           ) : (
             <div className="h-72 flex items-center justify-center text-gray-500">Sin datos</div>
@@ -172,8 +173,10 @@ export default function ReportesInventarioPage() {
             data={stockDistribution}
             category="value"
             index="name"
-            colors={['emerald', 'yellow', 'red']}
+            colors={['emerald', 'amber', 'rose']}
             className="h-72"
+            showAnimation={true}
+            valueFormatter={(value: number) => `${value} productos`}
           />
         </Card>
       </div>
@@ -186,10 +189,11 @@ export default function ReportesInventarioPage() {
               data={valueByProduct}
               index="name"
               categories={['Valor']}
-              colors={['indigo']}
+              colors={['violet']}
               yAxisWidth={64}
               valueFormatter={(n: number) => `$${n.toLocaleString()}`}
               className="h-72"
+              showAnimation={true}
             />
           ) : (
             <div className="h-72 flex items-center justify-center text-gray-500">Sin datos</div>
@@ -203,9 +207,10 @@ export default function ReportesInventarioPage() {
               data={productRentalStats}
               index="name"
               categories={['Alquileres']}
-              colors={['teal']}
+              colors={['fuchsia']}
               yAxisWidth={48}
               className="h-72"
+              showAnimation={true}
             />
           ) : (
             <div className="h-72 flex items-center justify-center text-gray-500">Sin datos de alquileres</div>
@@ -216,7 +221,7 @@ export default function ReportesInventarioPage() {
       <Card className="shadow-sm">
         <Title className="text-lg font-bold mb-4">⚠️ Productos que Requieren Atención</Title>
         <div className="space-y-2">
-          {products.filter((p: Product) => p.stock < 10).length === 0 ? (
+          {products.filter((p: Product) => p.stockActual < 10).length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Text className="text-3xl mb-2">✅</Text>
               <Text>Todos los productos tienen stock suficiente</Text>

@@ -2,7 +2,8 @@ export interface Product {
   id: string;
   name: string;
   description: string;
-  stock: number;
+  stockTotal: number;
+  stockActual: number;
   price: number;
 }
 
@@ -16,12 +17,14 @@ export interface RentalItem {
 
 export interface Rental {
   id: string;
-  workId: string; // ID de la obra
-  workName: string; // Nombre de la obra
-  clientId: string; // ID del cliente (para referencia rápida)
-  clientName: string; // Nombre del cliente (para referencia rápida)
+  workId: string;
+  workName: string;
+  clientId: string;
+  clientName: string;
   items: RentalItem[];
   totalPrice: number;
+  pagado: number;
+  resto: number;
   returnDate: string;
   createdAt: string;
   status: 'active' | 'returned';
@@ -38,10 +41,13 @@ export interface Client {
 export interface Obra {
   id: string;
   clientId: string;
-  clientName: string; // Para referencia rápida
+  clientName: string;
   name: string;
   description?: string;
   address?: string;
+  totalPrice: number;
+  pagado: number;
+  resto: number;
   status: 'active' | 'completed' | 'paused';
   createdAt: string;
 }

@@ -216,10 +216,11 @@ export default function ReportesAlquileresPage() {
             data={monthlyRevenue}
             index="date"
             categories={['Ingresos']}
-            colors={['blue']}
+            colors={['cyan']}
             valueFormatter={(n: number) => `$${n.toLocaleString()}`}
             yAxisWidth={64}
             className="h-72"
+            showAnimation={true}
           />
         </Card>
 
@@ -229,9 +230,10 @@ export default function ReportesAlquileresPage() {
             data={monthlyRentals}
             index="date"
             categories={['Alquileres']}
-            colors={['teal']}
+            colors={['violet']}
             yAxisWidth={32}
             className="h-72"
+            showAnimation={true}
           />
         </Card>
       </div>
@@ -243,8 +245,10 @@ export default function ReportesAlquileresPage() {
             data={statusDistribution}
             category="value"
             index="name"
-            colors={['green', 'gray', 'red']}
+            colors={['emerald', 'slate', 'rose']}
             className="h-64"
+            showAnimation={true}
+            valueFormatter={(value: number) => `${value} alquileres`}
           />
         </Card>
 
@@ -255,11 +259,12 @@ export default function ReportesAlquileresPage() {
               data={topClients}
               index="name"
               categories={['Ingresos']}
-              colors={['indigo']}
+              colors={['amber']}
               valueFormatter={(n: number) => `$${n.toLocaleString()}`}
               yAxisWidth={64}
               className="h-64"
               layout="vertical"
+              showAnimation={true}
             />
           ) : (
             <div className="h-64 flex items-center justify-center text-gray-500">Sin datos</div>
@@ -273,11 +278,12 @@ export default function ReportesAlquileresPage() {
               data={topProducts}
               index="name"
               categories={['Ingresos']}
-              colors={['purple']}
+              colors={['fuchsia']}
               valueFormatter={(n: number) => `$${n.toLocaleString()}`}
               yAxisWidth={64}
               className="h-64"
               layout="vertical"
+              showAnimation={true}
             />
           ) : (
             <div className="h-64 flex items-center justify-center text-gray-500">Sin datos</div>

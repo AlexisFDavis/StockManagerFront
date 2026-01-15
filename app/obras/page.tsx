@@ -20,10 +20,21 @@ export default function ObrasPage() {
   const rentals = useStore((state: any) => state.rentals);
   const addObra = useStore((state: any) => state.addObra);
   const updateObra = useStore((state: any) => state.updateObra);
+  const updateObraPayment = useStore((state: any) => state.updateObraPayment);
+  const finishObra = useStore((state: any) => state.finishObra);
+  const pauseObra = useStore((state: any) => state.pauseObra);
+  const reactivateObra = useStore((state: any) => state.reactivateObra);
   const deleteObra = useStore((state: any) => state.deleteObra);
+  const products = useStore((state: any) => state.products);
+  const updateProduct = useStore((state: any) => state.updateProduct);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditPaymentOpen, setIsEditPaymentOpen] = useState(false);
+  const [isReactivateOpen, setIsReactivateOpen] = useState(false);
   const [editingObra, setEditingObra] = useState<Obra | null>(null);
+  const [selectedObra, setSelectedObra] = useState<Obra | null>(null);
+  const [pagado, setPagado] = useState(0);
+  const [missingProducts, setMissingProducts] = useState<{ productId: string; productName: string; needed: number; current: number; missing: number }[]>([]);
   const [formData, setFormData] = useState({
     clientId: '',
     name: '',
@@ -84,6 +95,93 @@ export default function ObrasPage() {
       addObra(formData);
     }
     setIsDialogOpen(false);
+  };
+
+  const openEditPaymentDialog = (obra: Obra) => {
+    setSelectedObra(obra);
+    setPagado(obra.pagado || 0);
+    setIsEditPaymentOpen(true);
+  };
+
+  const handleUpdatePayment = () => {
+    if (!selectedObra) return;
+    updateObraPayment(selectedObra.id, pagado);
+    setIsEditPaymentOpen(false);
+  };
+
+  const handleFinishObra = (obraId: string) => {
+    if (confirm('¿Finalizar esta obra? Se devolverán todos los productos alquilados.')) {
+      finishObra(obraId);
+    }
+  };
+
+  const handlePauseObra = (obraId: string) => {
+    if (confirm('¿Pausar esta obra? Los productos seguirán alquilados.')) {
+      pauseObra(obraId);
+    }
+  };
+
+  const checkStockForReactivation = (obra: Obra) => {
+    const obraRentals = rentals.filter((r: any) => r.workId === obra.id);
+    const missing: { productId: string; productName: string; needed: number; current: number; missing: number }[] = [];
+
+    obraRentals.forEach((rental: any) => {
+      rental.items.forEach((item: any) => {
+        const product = products.find((p: any) => p.id === item.productId);
+        if (product) {
+          const needed = item.quantity;
+          const current = product.stockActual;
+          if (current < needed) {
+            const existing = missing.find((m) => m.productId === item.productId);
+            if (existing) {
+              existing.needed += needed;
+              existing.missing = existing.needed - existing.current;
+            } else {
+              missing.push({
+                productId: item.productId,
+                productName: item.productName,
+                needed: needed,
+                current: current,
+                missing: needed - current,
+              });
+            }
+          }
+        }
+      });
+    });
+
+    return missing;
+  };
+
+  const handleReactivateObra = (obra: Obra) => {
+    const missing = checkStockForReactivation(obra);
+    if (missing.length > 0) {
+      setSelectedObra(obra);
+      setMissingProducts(missing);
+      setIsReactivateOpen(true);
+    } else {
+      if (confirm('¿Reactivar esta obra?')) {
+        reactivateObra(obra.id);
+      }
+    }
+  };
+
+  const handleAddMissingProducts = () => {
+    if (!selectedObra) return;
+    
+    missingProducts.forEach((missing) => {
+      const product = products.find((p: any) => p.id === missing.productId);
+      if (product) {
+        updateProduct(missing.productId, {
+          stockTotal: product.stockTotal + missing.missing,
+          stockActual: product.stockActual + missing.missing,
+        });
+      }
+    });
+
+    reactivateObra(selectedObra.id);
+    setIsReactivateOpen(false);
+    setMissingProducts([]);
   };
 
   const totalObras = obras.length;
@@ -250,30 +348,96 @@ export default function ObrasPage() {
                     <Text className="font-semibold text-green-600">{activeRentals}</Text>
                   </div>
                 </div>
-                <div className="mb-3">
-                  <Text className="text-gray-400 text-xs uppercase">Ingresos Totales</Text>
-                  <Text className="font-bold text-xl text-gray-900">${totalRevenue.toLocaleString()}</Text>
+                
+                <div className="mb-3 space-y-2">
+                  <div>
+                    <Text className="text-gray-400 text-xs uppercase">Total</Text>
+                    <Text className="font-bold text-lg text-gray-900">${(obra.totalPrice || 0).toLocaleString()}</Text>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Text className="text-gray-400 text-xs uppercase">Pagado</Text>
+                      <div className="flex items-center gap-2">
+                        <Text className="font-semibold text-green-600">${(obra.pagado || 0).toLocaleString()}</Text>
+                        {obra.status === 'active' && (
+                          <button
+                            onClick={() => openEditPaymentDialog(obra)}
+                            className="p-1 text-gray-400 hover:text-green-600"
+                            title="Editar pago"
+                          >
+                            ✏️
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <Text className="text-gray-400 text-xs uppercase">Resto</Text>
+                      <Text className={`font-semibold ${(obra.resto || 0) === (obra.totalPrice || 0) ? 'text-red-600' : 'text-orange-600'}`}>
+                        ${(obra.resto || 0).toLocaleString()}
+                      </Text>
+                    </div>
+                  </div>
+                  {(obra.resto || 0) === (obra.totalPrice || 0) && obra.status === 'active' && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+                      <Text className="text-yellow-800 text-xs">⚠️ Se ha Devuelto monto igual al total</Text>
+                    </div>
+                  )}
                 </div>
+                
                 <div className="mb-3">
                   <Text className="text-gray-400 text-xs uppercase">Creada</Text>
                   <Text className="text-gray-600 text-sm">{format(new Date(obra.createdAt), 'dd/MM/yyyy')}</Text>
                 </div>
                 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => openEditDialog(obra)}
-                    className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm('¿Eliminar esta obra?')) deleteObra(obra.id);
-                    }}
-                    className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all shadow-sm hover:shadow-md"
-                  >
-                    Eliminar
-                  </button>
+                <div className="flex flex-col gap-2">
+                  {obra.status === 'active' && (
+                    <>
+                      <button
+                        onClick={() => handleFinishObra(obra.id)}
+                        className="w-full px-3 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-md hover:shadow-lg"
+                      >
+                        ✅ Finalizar Obra
+                      </button>
+                      <button
+                        onClick={() => handlePauseObra(obra.id)}
+                        className="w-full px-3 py-2 text-sm font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100 rounded-xl transition-all shadow-sm hover:shadow-md"
+                      >
+                        ⏸️ Pausar Obra
+                      </button>
+                    </>
+                  )}
+                  {obra.status === 'completed' && (
+                    <button
+                      onClick={() => handleReactivateObra(obra)}
+                      className="w-full px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md hover:shadow-lg"
+                    >
+                      🔄 Reactivar Obra
+                    </button>
+                  )}
+                  {obra.status === 'paused' && (
+                    <button
+                      onClick={() => handleReactivateObra(obra)}
+                      className="w-full px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md hover:shadow-lg"
+                    >
+                      🔄 Reactivar Obra
+                    </button>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => openEditDialog(obra)}
+                      className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm('¿Eliminar esta obra?')) deleteObra(obra.id);
+                      }}
+                      className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all shadow-sm hover:shadow-md"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -387,6 +551,130 @@ export default function ObrasPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {isEditPaymentOpen && selectedObra && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+          style={{ 
+            minHeight: '100vh',
+            height: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsEditPaymentOpen(false);
+            }
+          }}
+        >
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6">
+            <Title className="text-xl font-bold mb-4">Editar Pago - {selectedObra.name}</Title>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Total de la Obra</label>
+                <Text className="text-lg font-bold">${(selectedObra.totalPrice || 0).toLocaleString()}</Text>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Pagado</label>
+                <TextInput
+                  type="number"
+                  min="0"
+                  max={selectedObra.totalPrice || 0}
+                  value={pagado.toString()}
+                  onChange={(e) => setPagado(Math.max(0, Math.min(selectedObra.totalPrice || 0, parseFloat(e.target.value) || 0)))}
+                  className="pl-4"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Resto</label>
+                <Text className="text-lg font-semibold text-orange-600">${((selectedObra.totalPrice || 0) - pagado).toLocaleString()}</Text>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button
+                  onClick={() => setIsEditPaymentOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpdatePayment}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-md hover:shadow-lg"
+                >
+                  Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isReactivateOpen && selectedObra && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-4"
+          style={{ 
+            minHeight: '100vh',
+            height: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflowY: 'auto'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsReactivateOpen(false);
+            }
+          }}
+        >
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 my-auto">
+            <Title className="text-xl font-bold mb-4">Stock Insuficiente - {selectedObra.name}</Title>
+            <div className="space-y-4">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <Text className="text-yellow-800 text-sm font-medium">
+                  ⚠️ No hay stock suficiente para reactivar esta obra. Se agregarán los siguientes productos:
+                </Text>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Productos a Agregar</label>
+                <div className="border border-gray-200 rounded-lg divide-y max-h-60 overflow-y-auto">
+                  {missingProducts.map((missing) => (
+                    <div key={missing.productId} className="p-3 bg-blue-50">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <Text className="font-medium text-sm">{missing.productName}</Text>
+                          <Text className="text-xs text-gray-500">
+                            Necesario: {missing.needed} | Actual: {missing.current} | Faltante: {missing.missing}
+                          </Text>
+                        </div>
+                        <Badge color="blue" size="sm">
+                          +{missing.missing}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button
+                  onClick={() => setIsReactivateOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddMissingProducts}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md hover:shadow-lg"
+                >
+                  Agregar Productos y Reactivar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

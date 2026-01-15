@@ -27,7 +27,7 @@ export default function InventarioPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    stock: 0,
+    stockTotal: 0,
     price: 0,
   });
 
@@ -41,9 +41,9 @@ export default function InventarioPage() {
         product.description.toLowerCase().includes(searchText.toLowerCase());
       
       let matchesStock = true;
-      if (stockFilter === 'low') matchesStock = product.stock > 0 && product.stock < 10;
-      if (stockFilter === 'out') matchesStock = product.stock === 0;
-      if (stockFilter === 'available') matchesStock = product.stock >= 10;
+      if (stockFilter === 'low') matchesStock = product.stockActual > 0 && product.stockActual < 10;
+      if (stockFilter === 'out') matchesStock = product.stockActual === 0;
+      if (stockFilter === 'available') matchesStock = product.stockActual >= 10;
       
       return matchesSearch && matchesStock;
     });
@@ -51,7 +51,7 @@ export default function InventarioPage() {
 
   const openAddDialog = () => {
     setEditingProduct(null);
-    setFormData({ name: '', description: '', stock: 0, price: 0 });
+    setFormData({ name: '', description: '', stockTotal: 0, price: 0 });
     setIsDialogOpen(true);
   };
 
@@ -60,7 +60,7 @@ export default function InventarioPage() {
     setFormData({
       name: product.name,
       description: product.description,
-      stock: product.stock,
+      stockTotal: product.stockTotal,
       price: product.price,
     });
     setIsDialogOpen(true);
@@ -77,9 +77,10 @@ export default function InventarioPage() {
   };
 
   const totalProducts = products.length;
-  const totalStock = products.reduce((sum: number, p: Product) => sum + p.stock, 0);
-  const lowStockProducts = products.filter((p: Product) => p.stock < 10 && p.stock > 0).length;
-  const outOfStockProducts = products.filter((p: Product) => p.stock === 0).length;
+  const totalStock = products.reduce((sum: number, p: Product) => sum + p.stockTotal, 0);
+  const stockActual = products.reduce((sum: number, p: Product) => sum + p.stockActual, 0);
+  const lowStockProducts = products.filter((p: Product) => p.stockActual < 10 && p.stockActual > 0).length;
+  const outOfStockProducts = products.filter((p: Product) => p.stockActual === 0).length;
 
   return (
     <div className="space-y-6">
@@ -97,7 +98,7 @@ export default function InventarioPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card decoration="top" decorationColor="blue" className="shadow-md rounded-2xl">
           <Text className="text-gray-500 text-sm">Total Productos</Text>
           <Metric className="text-2xl">{totalProducts}</Metric>
@@ -105,6 +106,10 @@ export default function InventarioPage() {
         <Card decoration="top" decorationColor="green" className="shadow-md rounded-2xl">
           <Text className="text-gray-500 text-sm">Stock Total</Text>
           <Metric className="text-2xl">{totalStock.toLocaleString()}</Metric>
+        </Card>
+        <Card decoration="top" decorationColor="indigo" className="shadow-md rounded-2xl">
+          <Text className="text-gray-500 text-sm">Stock Actual</Text>
+          <Metric className="text-2xl">{stockActual.toLocaleString()}</Metric>
         </Card>
         <Card decoration="top" decorationColor="yellow" className="shadow-md rounded-2xl">
           <Text className="text-gray-500 text-sm">Stock Bajo</Text>
@@ -154,12 +159,15 @@ export default function InventarioPage() {
                 <Text className="font-semibold text-lg text-gray-900">{product.name}</Text>
                 <Text className="text-gray-500 text-sm mt-1 line-clamp-2">{product.description}</Text>
               </div>
-              <Badge
-                size="lg"
-                color={product.stock === 0 ? 'red' : product.stock < 10 ? 'yellow' : 'green'}
-              >
-                {product.stock} uds
-              </Badge>
+              <div className="flex flex-col items-end gap-1">
+                <Badge
+                  size="lg"
+                  color={product.stockActual === 0 ? 'red' : product.stockActual < 10 ? 'yellow' : 'green'}
+                >
+                  {product.stockActual} actual
+                </Badge>
+                <Text className="text-xs text-gray-400">Total: {product.stockTotal}</Text>
+              </div>
             </div>
             
             <div className="border-t border-gray-100 pt-3 mt-3">
@@ -170,7 +178,7 @@ export default function InventarioPage() {
                 </div>
                 <div className="text-right">
                   <Text className="text-gray-400 text-xs uppercase">Valor total</Text>
-                  <Text className="font-semibold text-gray-700">${(product.stock * product.price).toLocaleString()}</Text>
+                  <Text className="font-semibold text-gray-700">${(product.stockTotal * product.price).toLocaleString()}</Text>
                 </div>
               </div>
               
@@ -246,12 +254,12 @@ export default function InventarioPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stock Total</label>
                 <TextInput
                   type="number"
                   min="0"
-                  value={formData.stock.toString()}
-                  onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
+                  value={formData.stockTotal.toString()}
+                  onChange={(e) => setFormData({ ...formData, stockTotal: parseInt(e.target.value) || 0 })}
                   required
                 />
               </div>
