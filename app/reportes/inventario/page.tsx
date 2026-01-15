@@ -239,8 +239,6 @@ export default function ReportesInventarioPage() {
                 </thead>
                 <tbody className="divide-y">
                   {products
-                    .filter((p: Product) => p.stock < 10)
-                    .sort((a: Product, b: Product) => a.stock - b.stock)
                     .map((p: Product) => (
                       <tr key={p.id} className="hover:bg-gray-50">
                         <td className="p-3 font-medium">{p.name}</td>
