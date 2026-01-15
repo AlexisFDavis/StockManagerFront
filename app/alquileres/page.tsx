@@ -168,7 +168,7 @@ export default function AlquileresPage() {
         }]);
       }
     }
-    setManualTotal(null);
+    
   };
 
   const removeItemFromRental = (productId: string) => {
@@ -185,7 +185,6 @@ export default function AlquileresPage() {
           : item
       )
     );
-    setManualTotal(null);
   };
 
   const calculatedTotal = useMemo(() => rentalItems.reduce((sum, item) => sum + item.totalPrice, 0), [rentalItems]);
