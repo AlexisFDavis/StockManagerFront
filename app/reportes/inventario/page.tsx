@@ -242,13 +242,13 @@ export default function ReportesInventarioPage() {
                     .map((p: Product) => (
                       <tr key={p.id} className="hover:bg-gray-50">
                         <td className="p-3 font-medium">{p.name}</td>
-                        <td className="p-3">{p.stock} uds</td>
+                        <td className="p-3">{p.stockActual} uds</td>
                         <td className="p-3">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${p.stock === 0 ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                            {p.stock === 0 ? 'Sin Stock' : 'Stock Bajo'}
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${p.stockActual === 0 ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                            {p.stockActual === 0 ? 'Sin Stock' : 'Stock Bajo'}
                           </span>
                         </td>
-                        <td className="p-3">${(p.stock * p.price).toLocaleString()}</td>
+                        <td className="p-3">${(p.stockActual * p.price).toLocaleString()}</td>
                       </tr>
                     ))}
                 </tbody>
