@@ -191,7 +191,7 @@ export default function ObrasPage() {
 
   const obrasWithActiveRentals = useMemo(() => {
     const activeRentalWorkIds = new Set(
-      rentals.filter((r: any) => r.status === 'active').map((r: any) => r.workId)
+      rentals.filter((r: any) => r.status === 'iniciado').map((r: any) => r.workId)
     );
     return obras.filter((o: Obra) => activeRentalWorkIds.has(o.id)).length;
   }, [obras, rentals]);
@@ -225,10 +225,7 @@ export default function ObrasPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <Title className="text-2xl sm:text-3xl font-bold text-gray-900">Obras</Title>
-          <Text className="text-gray-500 mt-1 text-sm sm:text-base">Gestiona las obras de tus clientes</Text>
-        </div>
+        <div></div>
         <button
           onClick={openAddDialog}
           className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg"
@@ -309,7 +306,7 @@ export default function ObrasPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredObras.map((obra: Obra) => {
           const obraRentals = rentals.filter((r: any) => r.workId === obra.id);
-          const activeRentals = obraRentals.filter((r: any) => r.status === 'active').length;
+          const activeRentals = obraRentals.filter((r: any) => r.status === 'iniciado').length;
           const totalRevenue = obraRentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
           
           return (

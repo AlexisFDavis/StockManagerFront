@@ -40,15 +40,27 @@ export default function ReportesAlquileresPage() {
   }, [rentals, searchText, statusFilter, dateFrom, dateTo]);
 
   const totalRentals = rentals.length;
-  const activeRentals = rentals.filter((r: any) => r.status === 'active').length;
+  const activeRentals = rentals.filter((r: any) => r.status === 'iniciado').length;
+  const sinPresupuestar = rentals.filter((r: any) => r.status === 'sin presupuestar').length;
+  const presupuestados = rentals.filter((r: any) => r.status === 'presupuestado').length;
+  const finalizados = rentals.filter((r: any) => r.status === 'finalizado').length;
   const totalRevenue = rentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
   const avgRentalValue = totalRentals > 0 ? totalRevenue / totalRentals : 0;
-  const overdueRentals = rentals.filter((r: any) => r.status === 'active' && new Date(r.returnDate) < new Date()).length;
-  const returnedRentals = rentals.filter((r: any) => r.status === 'returned').length;
+  const overdueRentals = rentals.filter((r: any) => r.status === 'iniciado' && new Date(r.returnDate) < new Date()).length;
+  
+  // Ingresos por estado
+  const activeRevenue = rentals
+    .filter((r: any) => r.status === 'iniciado')
+    .reduce((sum: number, r: any) => sum + r.totalPrice, 0);
+  const finalizadosRevenue = rentals
+    .filter((r: any) => r.status === 'finalizado')
+    .reduce((sum: number, r: any) => sum + r.totalPrice, 0);
 
   const statusDistribution = [
-    { name: 'Activos', value: activeRentals },
-    { name: 'Devueltos', value: returnedRentals },
+    { name: 'Iniciados', value: activeRentals },
+    { name: 'Finalizados', value: finalizados },
+    { name: 'Presupuestados', value: presupuestados },
+    { name: 'Sin presupuestar', value: sinPresupuestar },
     { name: 'Vencidos', value: overdueRentals },
   ];
 
@@ -103,7 +115,7 @@ export default function ReportesAlquileresPage() {
       .sort((a, b) => b.total - a.total)
       .slice(0, 5)
       .map(c => ({
-        name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
+        name: c.name.length > 18 ? c.name.substring(0, 18) + '...' : c.name,
         Ingresos: c.total,
         Alquileres: c.count,
       }));
@@ -123,17 +135,13 @@ export default function ReportesAlquileresPage() {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5)
       .map(p => ({
-        name: p.name.length > 15 ? p.name.substring(0, 15) + '...' : p.name,
+        name: p.name.length > 18 ? p.name.substring(0, 18) + '...' : p.name,
         Ingresos: p.revenue,
       }));
   }, [rentals]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <Title className="text-3xl font-bold text-gray-900">Reportes de Alquileres</Title>
-        <Text className="text-gray-500 mt-1">Análisis de rendimiento y tendencias</Text>
-      </div>
 
       <Card className="shadow-sm border border-gray-200">
         <div className="mb-3">
@@ -157,8 +165,10 @@ export default function ReportesAlquileresPage() {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
             >
               <option value="all">Todos los estados</option>
-              <option value="active">Activos</option>
-              <option value="returned">Devueltos</option>
+              <option value="sin presupuestar">Sin presupuestar</option>
+              <option value="presupuestado">Presupuestado</option>
+              <option value="iniciado">Iniciado</option>
+              <option value="finalizado">Finalizado</option>
             </select>
           </div>
           <div>
@@ -188,24 +198,26 @@ export default function ReportesAlquileresPage() {
           <Metric className="text-xl">{totalRentals}</Metric>
         </Card>
         <Card decoration="top" decorationColor="green" className="shadow-sm">
-          <Text className="text-gray-500 text-xs">Activos</Text>
+          <Text className="text-gray-500 text-xs">Iniciados</Text>
           <Metric className="text-xl">{activeRentals}</Metric>
+          <Text className="text-xs text-gray-400 mt-1">${activeRevenue.toLocaleString()}</Text>
         </Card>
         <Card decoration="top" decorationColor="gray" className="shadow-sm">
-          <Text className="text-gray-500 text-xs">Devueltos</Text>
-          <Metric className="text-xl">{returnedRentals}</Metric>
+          <Text className="text-gray-500 text-xs">Finalizados</Text>
+          <Metric className="text-xl">{finalizados}</Metric>
+          <Text className="text-xs text-gray-400 mt-1">${finalizadosRevenue.toLocaleString()}</Text>
+        </Card>
+        <Card decoration="top" decorationColor="yellow" className="shadow-sm">
+          <Text className="text-gray-500 text-xs">Presupuestados</Text>
+          <Metric className="text-xl">{presupuestados}</Metric>
         </Card>
         <Card decoration="top" decorationColor="red" className="shadow-sm">
           <Text className="text-gray-500 text-xs">Vencidos</Text>
           <Metric className="text-xl">{overdueRentals}</Metric>
         </Card>
         <Card decoration="top" decorationColor="indigo" className="shadow-sm">
-          <Text className="text-gray-500 text-xs">Ingresos</Text>
+          <Text className="text-gray-500 text-xs">Ingresos Total</Text>
           <Metric className="text-xl">${totalRevenue.toLocaleString()}</Metric>
-        </Card>
-        <Card decoration="top" decorationColor="purple" className="shadow-sm">
-          <Text className="text-gray-500 text-xs">Prom/Alquiler</Text>
-          <Metric className="text-xl">${Math.round(avgRentalValue).toLocaleString()}</Metric>
         </Card>
       </div>
 
@@ -216,9 +228,9 @@ export default function ReportesAlquileresPage() {
             data={monthlyRevenue}
             index="date"
             categories={['Ingresos']}
-            colors={['cyan']}
+            colors={['indigo']}
             valueFormatter={(n: number) => `$${n.toLocaleString()}`}
-            yAxisWidth={64}
+            yAxisWidth={80}
             className="h-72"
             showAnimation={true}
           />
@@ -230,8 +242,8 @@ export default function ReportesAlquileresPage() {
             data={monthlyRentals}
             index="date"
             categories={['Alquileres']}
-            colors={['violet']}
-            yAxisWidth={32}
+            colors={['slate']}
+            yAxisWidth={40}
             className="h-72"
             showAnimation={true}
           />
@@ -242,10 +254,10 @@ export default function ReportesAlquileresPage() {
         <Card className="shadow-sm">
           <Title className="text-lg font-bold mb-4">Estado de Alquileres</Title>
           <DonutChart
-            data={statusDistribution}
+            data={statusDistribution.filter(s => s.value > 0)}
             category="value"
             index="name"
-            colors={['emerald', 'slate', 'rose']}
+            colors={['green', 'slate', 'yellow', 'gray', 'rose']}
             className="h-64"
             showAnimation={true}
             valueFormatter={(value: number) => `${value} alquileres`}
@@ -259,9 +271,9 @@ export default function ReportesAlquileresPage() {
               data={topClients}
               index="name"
               categories={['Ingresos']}
-              colors={['amber']}
+              colors={['emerald']}
               valueFormatter={(n: number) => `$${n.toLocaleString()}`}
-              yAxisWidth={64}
+              yAxisWidth={120}
               className="h-64"
               layout="vertical"
               showAnimation={true}
@@ -278,9 +290,9 @@ export default function ReportesAlquileresPage() {
               data={topProducts}
               index="name"
               categories={['Ingresos']}
-              colors={['fuchsia']}
+              colors={['indigo']}
               valueFormatter={(n: number) => `$${n.toLocaleString()}`}
-              yAxisWidth={64}
+              yAxisWidth={120}
               className="h-64"
               layout="vertical"
               showAnimation={true}
@@ -323,15 +335,21 @@ export default function ReportesAlquileresPage() {
                     <td className="p-3 font-semibold">${r.totalPrice.toLocaleString()}</td>
                     <td className="p-3">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        r.status === 'active' 
+                        r.status === 'iniciado' 
                           ? new Date(r.returnDate) < new Date() 
                             ? 'bg-red-100 text-red-700' 
                             : 'bg-green-100 text-green-700'
+                          : r.status === 'presupuestado'
+                          ? 'bg-blue-100 text-blue-700'
+                          : r.status === 'sin presupuestar'
+                          ? 'bg-gray-100 text-gray-700'
                           : 'bg-gray-100 text-gray-700'
                       }`}>
-                        {r.status === 'active' 
-                          ? new Date(r.returnDate) < new Date() ? 'Vencido' : 'Activo'
-                          : 'Devuelto'}
+                        {r.status === 'iniciado' 
+                          ? new Date(r.returnDate) < new Date() ? 'Vencido' : 'Iniciado'
+                          : r.status === 'presupuestado' ? 'Presupuestado'
+                          : r.status === 'sin presupuestar' ? 'Sin presupuestar'
+                          : 'Finalizado'}
                       </span>
                     </td>
                   </tr>

@@ -44,12 +44,12 @@ export default function ReportesInventarioPage() {
   const outOfStockProducts = products.filter((p: Product) => p.stockActual === 0).length;
 
   const stockByProduct = filteredProducts.map((p: Product) => ({
-    name: p.name.length > 15 ? p.name.substring(0, 15) + '...' : p.name,
+    name: p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name,
     Stock: p.stockActual,
   }));
 
   const valueByProduct = filteredProducts.map((p: Product) => ({
-    name: p.name.length > 15 ? p.name.substring(0, 15) + '...' : p.name,
+    name: p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name,
     Valor: p.stockTotal * p.price,
   }));
 
@@ -79,7 +79,7 @@ export default function ReportesInventarioPage() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
       .map(s => ({
-        name: s.name.length > 15 ? s.name.substring(0, 15) + '...' : s.name,
+        name: s.name.length > 20 ? s.name.substring(0, 20) + '...' : s.name,
         Alquileres: s.count,
         Ingresos: s.revenue,
       }));
@@ -87,10 +87,6 @@ export default function ReportesInventarioPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Title className="text-3xl font-bold text-gray-900">Reportes de Inventario</Title>
-        <Text className="text-gray-500 mt-1">Análisis detallado de productos y stock</Text>
-      </div>
 
       <Card className="shadow-sm border border-gray-200">
         <div className="mb-3">
@@ -157,7 +153,7 @@ export default function ReportesInventarioPage() {
               data={stockByProduct}
               index="name"
               categories={['Stock']}
-              colors={['cyan']}
+              colors={['blue']}
               yAxisWidth={48}
               className="h-72"
               showAnimation={true}
@@ -173,7 +169,7 @@ export default function ReportesInventarioPage() {
             data={stockDistribution}
             category="value"
             index="name"
-            colors={['emerald', 'amber', 'rose']}
+            colors={['emerald', 'amber', 'slate']}
             className="h-72"
             showAnimation={true}
             valueFormatter={(value: number) => `${value} productos`}
@@ -189,8 +185,8 @@ export default function ReportesInventarioPage() {
               data={valueByProduct}
               index="name"
               categories={['Valor']}
-              colors={['violet']}
-              yAxisWidth={64}
+              colors={['indigo']}
+              yAxisWidth={80}
               valueFormatter={(n: number) => `$${n.toLocaleString()}`}
               className="h-72"
               showAnimation={true}
@@ -207,7 +203,7 @@ export default function ReportesInventarioPage() {
               data={productRentalStats}
               index="name"
               categories={['Alquileres']}
-              colors={['fuchsia']}
+              colors={['purple']}
               yAxisWidth={48}
               className="h-72"
               showAnimation={true}

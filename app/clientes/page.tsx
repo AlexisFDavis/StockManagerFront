@@ -7,6 +7,7 @@ import {
   Title,
   Text,
   TextInput,
+  Textarea,
   Badge,
   Metric,
   Select,
@@ -24,9 +25,11 @@ export default function ClientesPage() {
   const deleteClient = useStore((state: any) => state.deleteClient);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '', address: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', phone: '', address: '', notes: '' });
+  const [detailsNotes, setDetailsNotes] = useState('');
 
   const [searchText, setSearchText] = useState('');
   const [activityFilter, setActivityFilter] = useState('all');
@@ -35,7 +38,7 @@ export default function ClientesPage() {
     return clients.map((client: Client) => {
       const clientRentals = rentals.filter((r: any) => r.clientId === client.id);
       const totalSpent = clientRentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
-      const activeRentals = clientRentals.filter((r: any) => r.status === 'active').length;
+      const activeRentals = clientRentals.filter((r: any) => r.status === 'iniciado').length;
       return { ...client, totalSpent, totalRentals: clientRentals.length, activeRentals };
     });
   }, [clients, rentals]);
@@ -66,21 +69,34 @@ export default function ClientesPage() {
 
   const totalClients = clients.length;
   const clientsWithActiveRentals = useMemo(() => {
-    const activeClientIds = new Set(rentals.filter((r: any) => r.status === 'active').map((r: any) => r.clientId));
+    const activeClientIds = new Set(rentals.filter((r: any) => r.status === 'iniciado').map((r: any) => r.clientId));
     return activeClientIds.size;
   }, [rentals]);
   const totalRevenue = rentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
 
   const openAddDialog = () => {
     setEditingClient(null);
-    setFormData({ name: '', email: '', phone: '', address: '' });
+    setFormData({ name: '', email: '', phone: '', address: '', notes: '' });
     setIsDialogOpen(true);
   };
 
   const openEditDialog = (client: Client) => {
     setEditingClient(client);
-    setFormData({ name: client.name, email: client.email, phone: client.phone, address: client.address });
+    setFormData({ name: client.name, email: client.email, phone: client.phone, address: client.address, notes: client.notes || '' });
     setIsDialogOpen(true);
+  };
+
+  const openDetailsDialog = (client: Client) => {
+    setSelectedClientId(client.id);
+    setDetailsNotes(client.notes || '');
+    setIsDetailsOpen(true);
+  };
+
+  const handleSaveDetailsNotes = () => {
+    if (selectedClientId) {
+      updateClient(selectedClientId, { notes: detailsNotes });
+      setIsDetailsOpen(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -98,10 +114,7 @@ export default function ClientesPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div>
-          <Title className="text-3xl font-bold text-gray-900">Clientes</Title>
-          <Text className="text-gray-500 mt-1">Gestiona la información de tus clientes</Text>
-        </div>
+        <div></div>
         <button
           onClick={openAddDialog}
           className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm"
@@ -213,6 +226,7 @@ export default function ClientesPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    <button onClick={() => openDetailsDialog(selectedClient)} className="px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all shadow-sm hover:shadow-md">🔍 Detalles</button>
                     <button onClick={() => openEditDialog(selectedClient)} className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md">Editar</button>
                     <button
                       onClick={() => {
@@ -288,8 +302,8 @@ export default function ClientesPage() {
                               <Text className="font-medium text-sm">{rental.workName}</Text>
                               <Text className="text-xs text-gray-500">#{rental.id.slice(-6)} - {format(new Date(rental.createdAt), 'dd/MM/yyyy')}</Text>
                             </div>
-                            <Badge color={rental.status === 'active' ? 'green' : 'gray'} size="sm">
-                              {rental.status === 'active' ? 'Activo' : 'Devuelto'}
+                            <Badge color={rental.status === 'iniciado' ? 'green' : rental.status === 'presupuestado' ? 'blue' : rental.status === 'sin presupuestar' ? 'gray' : 'gray'} size="sm">
+                              {rental.status === 'iniciado' ? 'Iniciado' : rental.status === 'presupuestado' ? 'Presupuestado' : rental.status === 'sin presupuestar' ? 'Sin presupuestar' : 'Finalizado'}
                             </Badge>
                           </div>
                           <div className="bg-gray-50 rounded p-2 mb-2 text-xs">
@@ -354,11 +368,109 @@ export default function ClientesPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
               <TextInput value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} placeholder="Dirección completa" required />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+              <Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Notas adicionales sobre el cliente..." rows={4} />
+            </div>
             <div className="flex justify-end gap-3 pt-4 border-t">
               <button type="button" onClick={() => setIsDialogOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md">Cancelar</button>
               <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md hover:shadow-lg">{editingClient ? 'Guardar' : 'Crear'}</button>
             </div>
           </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Detalles */}
+      {isDetailsOpen && selectedClient && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+          style={{ 
+            minHeight: '100vh',
+            height: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsDetailsOpen(false);
+            }
+          }}
+        >
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <Title className="text-2xl font-bold mb-6">Detalles del Cliente</Title>
+            
+            <div className="space-y-6">
+              {/* Información básica */}
+              <div>
+                <Text className="text-sm font-semibold text-gray-700 mb-2">Información de Contacto</Text>
+                <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                  <div>
+                    <Text className="text-xs text-gray-500">Nombre</Text>
+                    <Text className="text-base font-semibold text-gray-900">{selectedClient.name}</Text>
+                  </div>
+                  <div>
+                    <Text className="text-xs text-gray-500">Email</Text>
+                    <Text className="text-base text-gray-700">{selectedClient.email}</Text>
+                  </div>
+                  <div>
+                    <Text className="text-xs text-gray-500">Teléfono</Text>
+                    <Text className="text-base text-gray-700">{selectedClient.phone}</Text>
+                  </div>
+                  <div>
+                    <Text className="text-xs text-gray-500">Dirección</Text>
+                    <Text className="text-base text-gray-700">{selectedClient.address}</Text>
+                  </div>
+                </div>
+              </div>
+
+              {/* Estadísticas */}
+              <div>
+                <Text className="text-sm font-semibold text-gray-700 mb-2">Estadísticas</Text>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-blue-50 rounded-lg p-3 text-center">
+                    <Text className="text-blue-600 text-xs">Obras</Text>
+                    <Text className="text-xl font-bold text-blue-700">{clientObras.length}</Text>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-3 text-center">
+                    <Text className="text-green-600 text-xs">Alquileres Activos</Text>
+                    <Text className="text-xl font-bold text-green-700">{selectedClient.activeRentals}</Text>
+                  </div>
+                  <div className="bg-indigo-50 rounded-lg p-3 text-center">
+                    <Text className="text-indigo-600 text-xs">Total Gastado</Text>
+                    <Text className="text-xl font-bold text-indigo-700">${selectedClient.totalSpent.toLocaleString()}</Text>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notas */}
+              <div>
+                <Text className="text-sm font-semibold text-gray-700 mb-2">Notas</Text>
+                <Textarea 
+                  value={detailsNotes} 
+                  onChange={(e) => setDetailsNotes(e.target.value)} 
+                  placeholder="Agregar notas sobre el cliente..." 
+                  rows={6}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-6 mt-6 border-t">
+              <button 
+                onClick={() => setIsDetailsOpen(false)} 
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md"
+              >
+                Cerrar
+              </button>
+              <button 
+                onClick={handleSaveDetailsNotes} 
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md hover:shadow-lg"
+              >
+                Guardar Notas
+              </button>
+            </div>
           </div>
         </div>
       )}

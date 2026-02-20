@@ -27,7 +27,7 @@ export default function ReportesClientesPage() {
     return clients.map((client: Client) => {
       const clientRentals = rentals.filter((r: any) => r.clientId === client.id);
       const totalSpent = clientRentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
-      const activeRentals = clientRentals.filter((r: any) => r.status === 'active').length;
+      const activeRentals = clientRentals.filter((r: any) => r.status === 'iniciado').length;
       const lastRental = clientRentals.length > 0 
         ? clientRentals.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
         : null;
@@ -66,7 +66,7 @@ export default function ReportesClientesPage() {
       .sort((a: any, b: any) => b.totalSpent - a.totalSpent)
       .slice(0, 5)
       .map((c: any) => ({
-        name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
+        name: c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name,
         Ingresos: c.totalSpent,
       }));
   }, [clientStats]);
@@ -76,7 +76,7 @@ export default function ReportesClientesPage() {
       .sort((a: any, b: any) => b.totalRentals - a.totalRentals)
       .slice(0, 5)
       .map((c: any) => ({
-        name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
+        name: c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name,
         Alquileres: c.totalRentals,
       }));
   }, [clientStats]);
@@ -102,10 +102,6 @@ export default function ReportesClientesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Title className="text-3xl font-bold text-gray-900">Reportes de Clientes</Title>
-        <Text className="text-gray-500 mt-1">Análisis de clientes y comportamiento</Text>
-      </div>
 
       <Card className="shadow-sm border border-gray-200">
         <div className="mb-3">
@@ -172,9 +168,9 @@ export default function ReportesClientesPage() {
               data={topClientsByRevenue}
               index="name"
               categories={['Ingresos']}
-              colors={['emerald']}
+              colors={['indigo']}
               valueFormatter={(n: number) => `$${n.toLocaleString()}`}
-              yAxisWidth={64}
+              yAxisWidth={80}
               className="h-72"
               showAnimation={true}
             />
@@ -190,8 +186,8 @@ export default function ReportesClientesPage() {
               data={topClientsByRentals}
               index="name"
               categories={['Alquileres']}
-              colors={['cyan']}
-              yAxisWidth={32}
+              colors={['slate']}
+              yAxisWidth={40}
               className="h-72"
               showAnimation={true}
             />
@@ -208,7 +204,7 @@ export default function ReportesClientesPage() {
             data={clientActivityDistribution}
             category="value"
             index="name"
-            colors={['emerald', 'slate', 'amber']}
+            colors={['blue', 'slate', 'amber']}
             className="h-64"
             showAnimation={true}
             valueFormatter={(value: number) => `${value} clientes`}
@@ -221,10 +217,10 @@ export default function ReportesClientesPage() {
             data={revenueDistribution}
             category="value"
             index="name"
-            colors={['emerald', 'cyan', 'amber', 'rose']}
+            colors={['emerald', 'blue', 'amber', 'slate']}
             className="h-64"
             showAnimation={true}
-            valueFormatter={(value: number) => `$${value.toLocaleString()}`}
+            valueFormatter={(value: number) => `${value} clientes`}
           />
         </Card>
       </div>

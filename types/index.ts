@@ -5,6 +5,7 @@ export interface Product {
   stockTotal: number;
   stockActual: number;
   price: number;
+  notes?: string;
 }
 
 export interface RentalItem {
@@ -12,7 +13,9 @@ export interface RentalItem {
   productName: string;
   quantity: number;
   unitPrice: number;
+  dailyPrice: number;
   totalPrice: number;
+  addedDate: string;
 }
 
 export interface Rental {
@@ -27,7 +30,8 @@ export interface Rental {
   resto: number;
   returnDate: string;
   createdAt: string;
-  status: 'active' | 'returned';
+  status: 'sin presupuestar' | 'presupuestado' | 'iniciado' | 'finalizado';
+  notes?: string;
 }
 
 export interface Client {
@@ -36,6 +40,7 @@ export interface Client {
   email: string;
   phone: string;
   address: string;
+  notes?: string;
 }
 
 export interface Obra {
@@ -51,4 +56,3 @@ export interface Obra {
   status: 'active' | 'completed' | 'paused';
   createdAt: string;
 }
-

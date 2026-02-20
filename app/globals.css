@@ -4,103 +4,570 @@
 @tailwind utilities;
 /* stylelint-enable at-rule-no-unknown */
 
-/* Colores vibrantes para gráficos de Tremor */
+/* ============================================
+   PALETA DE COLORES SOBRIOS Y ELEGANTES
+   ============================================ */
 :root {
-  --tremor-content-emphasis: #1f2937;
-  --tremor-content-default: #374151;
-  --tremor-content-subtle: #6b7280;
+  --chart-cyan: #4A8B9B;
+  --chart-violet: #7B6FA0;
+  --chart-fuchsia: #967198;
+  --chart-emerald: #528C72;
+  --chart-amber: #B89B52;
+  --chart-rose: #B06060;
+  --chart-slate: #6B7B8D;
+  --chart-blue: #5078A8;
+  --chart-indigo: #636BA0;
+  --chart-teal: #4F8E86;
+  --chart-green: #5A8F5A;
+  --chart-purple: #7E6BA8;
+  --chart-orange: #C08050;
+  --chart-red: #B85555;
+  --chart-yellow: #B8A44A;
+  --chart-sky: #5A8EB0;
+  --chart-lime: #7A9E50;
+  --chart-pink: #B06080;
 }
 
-/* Colores de barras */
-.recharts-bar-rectangle path {
-  opacity: 0.9;
+/* ============================================
+   COLORES PARA BARRAS (BarChart)
+   ============================================ */
+/* Selector principal: cubre todos los rect dentro de recharts-bar */
+.recharts-bar rect,
+.recharts-bar-rectangle rect {
+  opacity: 0.85 !important;
 }
 
-/* Colores específicos de Tremor */
-[data-tremor-id] .fill-cyan-500,
-.tremor-BarChart .fill-cyan-500,
-.recharts-bar .fill-cyan-500 {
-  fill: #06b6d4 !important;
+/* Colores por clase fill-X-500 */
+.recharts-bar rect[class*="fill-cyan"],
+path[class*="fill-cyan"],
+rect[class*="fill-cyan"] { fill: var(--chart-cyan) !important; }
+
+.recharts-bar rect[class*="fill-violet"],
+path[class*="fill-violet"],
+rect[class*="fill-violet"] { fill: var(--chart-violet) !important; }
+
+.recharts-bar rect[class*="fill-fuchsia"],
+path[class*="fill-fuchsia"],
+rect[class*="fill-fuchsia"] { fill: var(--chart-fuchsia) !important; }
+
+.recharts-bar rect[class*="fill-emerald"],
+path[class*="fill-emerald"],
+rect[class*="fill-emerald"] { fill: var(--chart-emerald) !important; }
+
+.recharts-bar rect[class*="fill-amber"],
+path[class*="fill-amber"],
+rect[class*="fill-amber"] { fill: var(--chart-amber) !important; }
+
+.recharts-bar rect[class*="fill-rose"],
+path[class*="fill-rose"],
+rect[class*="fill-rose"] { fill: var(--chart-rose) !important; }
+
+.recharts-bar rect[class*="fill-slate"],
+path[class*="fill-slate"],
+rect[class*="fill-slate"] { fill: var(--chart-slate) !important; }
+
+.recharts-bar rect[class*="fill-blue"],
+path[class*="fill-blue"],
+rect[class*="fill-blue"] { fill: var(--chart-blue) !important; }
+
+.recharts-bar rect[class*="fill-indigo"],
+path[class*="fill-indigo"],
+rect[class*="fill-indigo"] { fill: var(--chart-indigo) !important; }
+
+.recharts-bar rect[class*="fill-teal"],
+path[class*="fill-teal"],
+rect[class*="fill-teal"] { fill: var(--chart-teal) !important; }
+
+.recharts-bar rect[class*="fill-green"],
+path[class*="fill-green"],
+rect[class*="fill-green"] { fill: var(--chart-green) !important; }
+
+.recharts-bar rect[class*="fill-purple"],
+path[class*="fill-purple"],
+rect[class*="fill-purple"] { fill: var(--chart-purple) !important; }
+
+.recharts-bar rect[class*="fill-orange"],
+path[class*="fill-orange"],
+rect[class*="fill-orange"] { fill: var(--chart-orange) !important; }
+
+.recharts-bar rect[class*="fill-red"],
+path[class*="fill-red"],
+rect[class*="fill-red"] { fill: var(--chart-red) !important; }
+
+.recharts-bar rect[class*="fill-yellow"],
+path[class*="fill-yellow"],
+rect[class*="fill-yellow"] { fill: var(--chart-yellow) !important; }
+
+.recharts-bar rect[class*="fill-sky"],
+path[class*="fill-sky"],
+rect[class*="fill-sky"] { fill: var(--chart-sky) !important; }
+
+.recharts-bar rect[class*="fill-lime"],
+path[class*="fill-lime"],
+rect[class*="fill-lime"] { fill: var(--chart-lime) !important; }
+
+.recharts-bar rect[class*="fill-pink"],
+path[class*="fill-pink"],
+rect[class*="fill-pink"] { fill: var(--chart-pink) !important; }
+
+/* Colores por atributo color="" (Tremor usa esto) */
+rect[color="cyan"], .recharts-bar-rectangle[color="cyan"] { fill: var(--chart-cyan) !important; }
+rect[color="violet"], .recharts-bar-rectangle[color="violet"] { fill: var(--chart-violet) !important; }
+rect[color="fuchsia"], .recharts-bar-rectangle[color="fuchsia"] { fill: var(--chart-fuchsia) !important; }
+rect[color="emerald"], .recharts-bar-rectangle[color="emerald"] { fill: var(--chart-emerald) !important; }
+rect[color="amber"], .recharts-bar-rectangle[color="amber"] { fill: var(--chart-amber) !important; }
+rect[color="rose"], .recharts-bar-rectangle[color="rose"] { fill: var(--chart-rose) !important; }
+rect[color="slate"], .recharts-bar-rectangle[color="slate"] { fill: var(--chart-slate) !important; }
+rect[color="blue"], .recharts-bar-rectangle[color="blue"] { fill: var(--chart-blue) !important; }
+rect[color="indigo"], .recharts-bar-rectangle[color="indigo"] { fill: var(--chart-indigo) !important; }
+rect[color="teal"], .recharts-bar-rectangle[color="teal"] { fill: var(--chart-teal) !important; }
+rect[color="green"], .recharts-bar-rectangle[color="green"] { fill: var(--chart-green) !important; }
+rect[color="purple"], .recharts-bar-rectangle[color="purple"] { fill: var(--chart-purple) !important; }
+rect[color="orange"], .recharts-bar-rectangle[color="orange"] { fill: var(--chart-orange) !important; }
+rect[color="red"], .recharts-bar-rectangle[color="red"] { fill: var(--chart-red) !important; }
+rect[color="yellow"], .recharts-bar-rectangle[color="yellow"] { fill: var(--chart-yellow) !important; }
+rect[color="sky"], .recharts-bar-rectangle[color="sky"] { fill: var(--chart-sky) !important; }
+rect[color="lime"], .recharts-bar-rectangle[color="lime"] { fill: var(--chart-lime) !important; }
+rect[color="pink"], .recharts-bar-rectangle[color="pink"] { fill: var(--chart-pink) !important; }
+
+/* Fallback: rect sin fill definido dentro de barras */
+.recharts-bar rect:not([fill]) { fill: var(--chart-slate) !important; }
+
+/* ============================================
+   COLORES PARA DONA / PIE (DonutChart)
+   ============================================ */
+.recharts-pie-sector,
+.recharts-sector {
+  stroke-width: 1px;
 }
 
-[data-tremor-id] .fill-violet-500,
-.tremor-BarChart .fill-violet-500,
-.recharts-bar .fill-violet-500 {
-  fill: #8b5cf6 !important;
+/* Sectores por clase fill-X-500 */
+path.recharts-sector[class*="fill-cyan"] { fill: var(--chart-cyan) !important; }
+path.recharts-sector[class*="fill-violet"] { fill: var(--chart-violet) !important; }
+path.recharts-sector[class*="fill-fuchsia"] { fill: var(--chart-fuchsia) !important; }
+path.recharts-sector[class*="fill-emerald"] { fill: var(--chart-emerald) !important; }
+path.recharts-sector[class*="fill-amber"] { fill: var(--chart-amber) !important; }
+path.recharts-sector[class*="fill-rose"] { fill: var(--chart-rose) !important; }
+path.recharts-sector[class*="fill-slate"] { fill: var(--chart-slate) !important; }
+path.recharts-sector[class*="fill-blue"] { fill: var(--chart-blue) !important; }
+path.recharts-sector[class*="fill-indigo"] { fill: var(--chart-indigo) !important; }
+path.recharts-sector[class*="fill-teal"] { fill: var(--chart-teal) !important; }
+path.recharts-sector[class*="fill-green"] { fill: var(--chart-green) !important; }
+path.recharts-sector[class*="fill-purple"] { fill: var(--chart-purple) !important; }
+path.recharts-sector[class*="fill-orange"] { fill: var(--chart-orange) !important; }
+path.recharts-sector[class*="fill-red"] { fill: var(--chart-red) !important; }
+path.recharts-sector[class*="fill-yellow"] { fill: var(--chart-yellow) !important; }
+path.recharts-sector[class*="fill-sky"] { fill: var(--chart-sky) !important; }
+path.recharts-sector[class*="fill-lime"] { fill: var(--chart-lime) !important; }
+path.recharts-sector[class*="fill-pink"] { fill: var(--chart-pink) !important; }
+
+/* Sectores por atributo color="" */
+path.recharts-sector[color="cyan"] { fill: var(--chart-cyan) !important; }
+path.recharts-sector[color="violet"] { fill: var(--chart-violet) !important; }
+path.recharts-sector[color="fuchsia"] { fill: var(--chart-fuchsia) !important; }
+path.recharts-sector[color="emerald"] { fill: var(--chart-emerald) !important; }
+path.recharts-sector[color="amber"] { fill: var(--chart-amber) !important; }
+path.recharts-sector[color="rose"] { fill: var(--chart-rose) !important; }
+path.recharts-sector[color="slate"] { fill: var(--chart-slate) !important; }
+path.recharts-sector[color="blue"] { fill: var(--chart-blue) !important; }
+path.recharts-sector[color="indigo"] { fill: var(--chart-indigo) !important; }
+path.recharts-sector[color="teal"] { fill: var(--chart-teal) !important; }
+path.recharts-sector[color="green"] { fill: var(--chart-green) !important; }
+path.recharts-sector[color="purple"] { fill: var(--chart-purple) !important; }
+path.recharts-sector[color="orange"] { fill: var(--chart-orange) !important; }
+path.recharts-sector[color="red"] { fill: var(--chart-red) !important; }
+path.recharts-sector[color="yellow"] { fill: var(--chart-yellow) !important; }
+path.recharts-sector[color="sky"] { fill: var(--chart-sky) !important; }
+path.recharts-sector[color="lime"] { fill: var(--chart-lime) !important; }
+path.recharts-sector[color="pink"] { fill: var(--chart-pink) !important; }
+
+/* ============================================
+   COLORES PARA ÁREA (AreaChart)
+   ============================================ */
+.recharts-area-area[class*="fill-cyan"] { fill: var(--chart-cyan) !important; opacity: 0.15 !important; }
+.recharts-area-curve[class*="stroke-cyan"] { stroke: var(--chart-cyan) !important; }
+.recharts-area-area[class*="fill-violet"] { fill: var(--chart-violet) !important; opacity: 0.15 !important; }
+.recharts-area-curve[class*="stroke-violet"] { stroke: var(--chart-violet) !important; }
+.recharts-area-area[class*="fill-blue"] { fill: var(--chart-blue) !important; opacity: 0.15 !important; }
+.recharts-area-curve[class*="stroke-blue"] { stroke: var(--chart-blue) !important; }
+.recharts-area-area[class*="fill-emerald"] { fill: var(--chart-emerald) !important; opacity: 0.15 !important; }
+.recharts-area-curve[class*="stroke-emerald"] { stroke: var(--chart-emerald) !important; }
+.recharts-area-area[class*="fill-indigo"] { fill: var(--chart-indigo) !important; opacity: 0.15 !important; }
+.recharts-area-curve[class*="stroke-indigo"] { stroke: var(--chart-indigo) !important; }
+.recharts-area-area[class*="fill-slate"] { fill: var(--chart-slate) !important; opacity: 0.15 !important; }
+.recharts-area-curve[class*="stroke-slate"] { stroke: var(--chart-slate) !important; }
+
+/* Colores por atributo color para áreas */
+.recharts-area-area[color="cyan"] { fill: var(--chart-cyan) !important; opacity: 0.15 !important; }
+.recharts-area-curve[color="cyan"] { stroke: var(--chart-cyan) !important; }
+.recharts-area-area[color="blue"] { fill: var(--chart-blue) !important; opacity: 0.15 !important; }
+.recharts-area-curve[color="blue"] { stroke: var(--chart-blue) !important; }
+.recharts-area-area[color="indigo"] { fill: var(--chart-indigo) !important; opacity: 0.15 !important; }
+.recharts-area-curve[color="indigo"] { stroke: var(--chart-indigo) !important; }
+.recharts-area-area[color="emerald"] { fill: var(--chart-emerald) !important; opacity: 0.15 !important; }
+.recharts-area-curve[color="emerald"] { stroke: var(--chart-emerald) !important; }
+.recharts-area-area[color="violet"] { fill: var(--chart-violet) !important; opacity: 0.15 !important; }
+.recharts-area-curve[color="violet"] { stroke: var(--chart-violet) !important; }
+.recharts-area-area[color="slate"] { fill: var(--chart-slate) !important; opacity: 0.15 !important; }
+.recharts-area-curve[color="slate"] { stroke: var(--chart-slate) !important; }
+
+/* ============================================
+   LEYENDA
+   ============================================ */
+.recharts-legend-item-text {
+  color: #4B5563 !important;
+  font-size: 12px !important;
 }
 
-[data-tremor-id] .fill-fuchsia-500,
-.tremor-BarChart .fill-fuchsia-500,
-.recharts-bar .fill-fuchsia-500 {
-  fill: #d946ef !important;
+/* Leyenda de Tremor - Círculos y texto */
+.tremor-Legend-legendItem {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-right: 12px !important;
+  margin-bottom: 4px !important;
 }
 
-[data-tremor-id] .fill-emerald-500,
-.tremor-BarChart .fill-emerald-500,
-.recharts-bar .fill-emerald-500 {
-  fill: #10b981 !important;
+.tremor-Legend-legendItem svg {
+  flex-shrink: 0 !important;
+  width: 12px !important;
+  height: 12px !important;
 }
 
-[data-tremor-id] .fill-amber-500,
-.tremor-BarChart .fill-amber-500,
-.recharts-bar .fill-amber-500 {
-  fill: #f59e0b !important;
+.tremor-Legend-legendItem svg circle {
+  fill: currentColor !important;
+  r: 4 !important;
+  cx: 4 !important;
+  cy: 4 !important;
 }
 
-[data-tremor-id] .fill-rose-500,
-.tremor-BarChart .fill-rose-500,
-.recharts-bar .fill-rose-500 {
-  fill: #f43f5e !important;
+/* Colores para círculos de leyenda de Tremor */
+.tremor-Legend-legendItem[data-color="cyan"] svg circle,
+.tremor-Legend-legendItem[style*="cyan"] svg circle {
+  fill: var(--chart-cyan) !important;
 }
 
-/* BarList colores */
+.tremor-Legend-legendItem[data-color="violet"] svg circle,
+.tremor-Legend-legendItem[style*="violet"] svg circle {
+  fill: var(--chart-violet) !important;
+}
+
+.tremor-Legend-legendItem[data-color="fuchsia"] svg circle,
+.tremor-Legend-legendItem[style*="fuchsia"] svg circle {
+  fill: var(--chart-fuchsia) !important;
+}
+
+.tremor-Legend-legendItem[data-color="emerald"] svg circle,
+.tremor-Legend-legendItem[style*="emerald"] svg circle {
+  fill: var(--chart-emerald) !important;
+}
+
+.tremor-Legend-legendItem[data-color="amber"] svg circle,
+.tremor-Legend-legendItem[style*="amber"] svg circle {
+  fill: var(--chart-amber) !important;
+}
+
+.tremor-Legend-legendItem[data-color="rose"] svg circle,
+.tremor-Legend-legendItem[style*="rose"] svg circle {
+  fill: var(--chart-rose) !important;
+}
+
+.tremor-Legend-legendItem[data-color="slate"] svg circle,
+.tremor-Legend-legendItem[style*="slate"] svg circle {
+  fill: var(--chart-slate) !important;
+}
+
+.tremor-Legend-legendItem[data-color="blue"] svg circle,
+.tremor-Legend-legendItem[style*="blue"] svg circle {
+  fill: var(--chart-blue) !important;
+}
+
+.tremor-Legend-legendItem[data-color="indigo"] svg circle,
+.tremor-Legend-legendItem[style*="indigo"] svg circle {
+  fill: var(--chart-indigo) !important;
+}
+
+.tremor-Legend-legendItem[data-color="teal"] svg circle,
+.tremor-Legend-legendItem[style*="teal"] svg circle {
+  fill: var(--chart-teal) !important;
+}
+
+.tremor-Legend-legendItem[data-color="green"] svg circle,
+.tremor-Legend-legendItem[style*="green"] svg circle {
+  fill: var(--chart-green) !important;
+}
+
+.tremor-Legend-legendItem[data-color="purple"] svg circle,
+.tremor-Legend-legendItem[style*="purple"] svg circle {
+  fill: var(--chart-purple) !important;
+}
+
+.tremor-Legend-legendItem[data-color="orange"] svg circle,
+.tremor-Legend-legendItem[style*="orange"] svg circle {
+  fill: var(--chart-orange) !important;
+}
+
+.tremor-Legend-legendItem[data-color="red"] svg circle,
+.tremor-Legend-legendItem[style*="red"] svg circle {
+  fill: var(--chart-red) !important;
+}
+
+.tremor-Legend-legendItem[data-color="yellow"] svg circle,
+.tremor-Legend-legendItem[style*="yellow"] svg circle {
+  fill: var(--chart-yellow) !important;
+}
+
+.tremor-Legend-legendItem[data-color="sky"] svg circle,
+.tremor-Legend-legendItem[style*="sky"] svg circle {
+  fill: var(--chart-sky) !important;
+}
+
+.tremor-Legend-legendItem[data-color="lime"] svg circle,
+.tremor-Legend-legendItem[style*="lime"] svg circle {
+  fill: var(--chart-lime) !important;
+}
+
+.tremor-Legend-legendItem[data-color="pink"] svg circle,
+.tremor-Legend-legendItem[style*="pink"] svg circle {
+  fill: var(--chart-pink) !important;
+}
+
+/* Texto de la leyenda de Tremor */
+.tremor-Legend-legendItem {
+  color: #374151 !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
+}
+
+.tremor-Legend-legendItem span,
+.tremor-Legend-legendItem > *:not(svg) {
+  color: #374151 !important;
+  font-size: 12px !important;
+  margin-left: 6px !important;
+}
+
+/* Asegurar que el texto sea visible */
+.tremor-Legend-root {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+/* Fix para círculos que no tienen color */
+.tremor-Legend-legendItem svg circle:not([fill]),
+.tremor-Legend-legendItem svg circle[fill=""] {
+  fill: var(--chart-slate) !important;
+}
+
+/* ============================================
+   EJES Y LABELS
+   ============================================ */
+.recharts-cartesian-axis-tick-value {
+  font-size: 12px !important;
+  fill: #6B7280 !important;
+}
+
+.recharts-yAxis .recharts-cartesian-axis-tick-value {
+  font-size: 12px !important;
+}
+
+.recharts-xAxis .recharts-cartesian-axis-tick-value {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  fill: #374151 !important;
+}
+
+/* Labels del eje X (nombres de categorías) - más grandes y legibles */
+.recharts-xAxis text,
+.recharts-xAxis tspan,
+.recharts-xAxis .recharts-label {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  fill: #374151 !important;
+}
+
+/* Labels del eje Y (valores numéricos) */
+.recharts-yAxis text,
+.recharts-yAxis tspan,
+.recharts-yAxis .recharts-label {
+  font-size: 12px !important;
+  fill: #6B7280 !important;
+}
+
+/* ============================================
+   BARLIST (Tremor)
+   ============================================ */
 .tremor-BarList-bar {
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
-/* DonutChart colores vibrantes */
-.recharts-pie-sector {
-  stroke-width: 2px;
+/* ============================================
+   TOOLTIP - POSICIONAMIENTO Y ESTILO
+   ============================================ */
+
+/* 1. Contenedores deben permitir overflow */
+div[class*="tremor-Card-root"] {
+  overflow: visible !important;
 }
 
-/* Tooltip mejorado - con contraste */
+.recharts-responsive-container,
+.recharts-wrapper {
+  overflow: visible !important;
+}
+
+/* 2. Tooltip wrapper: encima de todo */
 .recharts-tooltip-wrapper {
-  z-index: 1000 !important;
+  z-index: 9999 !important;
+  pointer-events: none !important;
+  outline: none !important;
 }
 
+/* 3. Tooltip por defecto de Recharts */
 .recharts-default-tooltip {
-  background-color: #1f2937 !important;
-  border: 1px solid #374151 !important;
-  border-radius: 8px !important;
-  padding: 12px !important;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3) !important;
+  background-color: #1E293B !important;
+  border: 1px solid #334155 !important;
+  border-radius: 10px !important;
+  padding: 12px 16px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  min-width: 160px !important;
+  max-width: 320px !important;
 }
 
 .recharts-tooltip-label {
-  color: #f9fafb !important;
+  color: #F1F5F9 !important;
   font-weight: 600 !important;
-  margin-bottom: 6px !important;
+  font-size: 13px !important;
+  margin-bottom: 8px !important;
+  padding-bottom: 8px !important;
+  border-bottom: 1px solid #475569 !important;
+  white-space: nowrap !important;
+}
+
+.recharts-tooltip-item-list {
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
 .recharts-tooltip-item {
-  color: #e5e7eb !important;
-  padding: 2px 0 !important;
+  color: #E2E8F0 !important;
+  padding: 4px 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  font-size: 12px !important;
 }
 
 .recharts-tooltip-item-name {
-  color: #9ca3af !important;
+  color: #94A3B8 !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  margin-right: 8px !important;
+}
+
+.recharts-tooltip-item-separator {
+  display: inline !important;
+  color: #64748B !important;
+  margin: 0 8px !important;
+  font-weight: 400 !important;
 }
 
 .recharts-tooltip-item-value {
-  color: #f9fafb !important;
-  font-weight: 500 !important;
+  color: #F8FAFC !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  white-space: nowrap !important;
+  margin-left: auto !important;
 }
 
-/* Leyenda con colores */
-.recharts-legend-item-text {
-  color: #374151 !important;
+/* 4. Tooltip de Tremor (ChartTooltip) */
+div[class*="tremor-ChartTooltip"],
+div[class*="chartTooltip"] {
+  z-index: 9999 !important;
+  background-color: #1E293B !important;
+  color: #F1F5F9 !important;
+  border: 1px solid #334155 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  padding: 12px 16px !important;
+  min-width: 160px !important;
+  max-width: 320px !important;
+  pointer-events: none !important;
 }
 
+div[class*="tremor-ChartTooltip"] *,
+div[class*="chartTooltip"] * {
+  color: #F1F5F9 !important;
+}
+
+div[class*="tremor-ChartTooltip"] p:first-child,
+div[class*="chartTooltip"] p:first-child {
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  margin-bottom: 8px !important;
+  padding-bottom: 8px !important;
+  border-bottom: 1px solid #475569 !important;
+}
+
+/* Asegurar separación en tooltips de Tremor */
+div[class*="tremor-ChartTooltip"] p:not(:first-child),
+div[class*="chartTooltip"] p:not(:first-child) {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 12px !important;
+  margin: 4px 0 !important;
+  font-size: 12px !important;
+}
+
+div[class*="tremor-ChartTooltip"] p:not(:first-child) span:first-child,
+div[class*="chartTooltip"] p:not(:first-child) span:first-child {
+  color: #94A3B8 !important;
+  font-weight: 400 !important;
+  margin-right: 8px !important;
+}
+
+div[class*="tremor-ChartTooltip"] p:not(:first-child) span:last-child,
+div[class*="chartTooltip"] p:not(:first-child) span:last-child {
+  color: #F8FAFC !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+}
+
+/* Manejar casos donde el texto está concatenado sin separación */
+/* Usar JavaScript para formatear, pero mientras tanto, mejorar el espaciado */
+div[class*="tremor-ChartTooltip"] p:not(:first-child),
+div[class*="chartTooltip"] p:not(:first-child) {
+  word-break: break-word !important;
+}
+
+/* Si el texto contiene "$" sin espacio, intentar agregar espacio visual */
+div[class*="tremor-ChartTooltip"] p:not(:first-child)::before {
+  content: "" !important;
+  display: inline-block !important;
+  width: 0 !important;
+}
+
+/* Mejorar el espaciado de caracteres para que "$" se vea separado */
+div[class*="tremor-ChartTooltip"] p:not(:first-child) {
+  font-feature-settings: "kern" 1, "liga" 1 !important;
+  text-rendering: optimizeLegibility !important;
+}
+
+/* ============================================
+   TREMOR DONUT CHART - centro label
+   ============================================ */
+.recharts-text.recharts-pie-label-text {
+  font-size: 11px !important;
+  fill: #6B7280 !important;
+}
+
+/* ============================================
+   DIALOGS / MODALS
+   ============================================ */
 div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] {
   display: flex !important;
   align-items: center !important;
@@ -130,6 +597,9 @@ div[data-headlessui-dialog] > div[class*="fixed"][class*="inset-0"] > div[class*
   transform: none !important;
 }
 
+/* ============================================
+   INPUTS
+   ============================================ */
 .tremor-TextInput-input,
 .tremor-Textarea-textarea,
 input[type="text"],
@@ -142,21 +612,3 @@ select {
   padding-left: 1rem !important;
   padding-right: 1rem !important;
 }
-
-div[class*="tremor-Card-root"] {
-  overflow: visible !important;
-}
-
-div[class*="tremor-ChartTooltip"] {
-  z-index: 60 !important;
-  background-color: #111827 !important;
-  color: #f9fafb !important;
-  border: 1px solid #1f2937 !important;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2) !important;
-  transform: translateY(-8px) !important;
-}
-
-div[class*="tremor-ChartTooltip"] * {
-  color: #f9fafb !important;
-}
-

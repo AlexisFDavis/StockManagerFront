@@ -23,10 +23,12 @@ interface StoreState {
   deleteObra: (id: string) => void;
   
   rentals: Rental[];
-  addRental: (rental: Omit<Rental, 'id' | 'createdAt' | 'totalPrice' | 'pagado' | 'resto'>) => void;
+  addRental: (rental: Omit<Rental, 'id' | 'createdAt' | 'totalPrice' | 'pagado' | 'resto' | 'status'>) => void;
   updateRental: (id: string, rental: Partial<Rental>) => void;
   updateRentalItems: (id: string, items: RentalItem[]) => void;
   updateRentalPayment: (id: string, pagado: number) => void;
+  updateRentalStatus: (id: string, status: Rental['status']) => void;
+  updateRentalNotes: (id: string, notes: string) => void;
   returnRental: (id: string) => void;
   reactivateRental: (id: string) => void;
   partialReturn: (rentalId: string, itemsToReturn: { productId: string; quantity: number }[]) => void;
@@ -177,14 +179,18 @@ const initialRentals: Rental[] = [
         productName: 'Martillo de construcción',
         quantity: 20,
         unitPrice: 200,
+        dailyPrice: 200,
         totalPrice: 4000,
+        addedDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
       },
       {
         productId: '2',
         productName: 'Taladro eléctrico',
         quantity: 5,
         unitPrice: 500,
+        dailyPrice: 500,
         totalPrice: 2500,
+        addedDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
       },
     ],
     totalPrice: 6500,
@@ -192,7 +198,8 @@ const initialRentals: Rental[] = [
     resto: 3500,
     returnDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    status: 'active',
+    status: 'iniciado',
+    notes: '',
   },
   {
     id: '2',
@@ -206,7 +213,9 @@ const initialRentals: Rental[] = [
         productName: 'Andamio modular',
         quantity: 3,
         unitPrice: 1200,
+        dailyPrice: 1200,
         totalPrice: 3600,
+        addedDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
       },
     ],
     totalPrice: 3600,
@@ -214,7 +223,8 @@ const initialRentals: Rental[] = [
     resto: 3600,
     returnDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    status: 'active',
+    status: 'iniciado',
+    notes: '',
   },
 ];
 
@@ -252,7 +262,7 @@ export const useStore = create<StoreState>((set: any) => ({
   
   updateStock: (id, quantity) => {
     set((state: any) => {
-      const activeRentals = state.rentals.filter((r: any) => r.status === 'active');
+      const activeRentals = state.rentals.filter((r: any) => r.status === 'iniciado');
       const productRented = activeRentals.reduce((sum: number, rental: any) => {
         const item = rental.items.find((i: any) => i.productId === id);
         return sum + (item ? item.quantity : 0);
@@ -352,7 +362,7 @@ export const useStore = create<StoreState>((set: any) => ({
       const obra = state.obras.find((o: any) => o.id === id);
       if (!obra) return state;
 
-      const obraRentals = state.rentals.filter((r: any) => r.workId === id && r.status === 'active');
+      const obraRentals = state.rentals.filter((r: any) => r.workId === id && r.status === 'iniciado');
       
       const updatedProducts = state.products.map((product: any) => {
         let stockToReturn = 0;
@@ -372,8 +382,8 @@ export const useStore = create<StoreState>((set: any) => ({
       });
 
       const updatedRentals = state.rentals.map((r: any) => {
-        if (r.workId === id && r.status === 'active') {
-          return { ...r, status: 'returned' as const, pagado: r.totalPrice, resto: 0 };
+        if (r.workId === id && r.status === 'iniciado') {
+          return { ...r, status: 'finalizado' as const, pagado: r.totalPrice, resto: 0 };
         }
         return r;
       });
@@ -427,8 +437,8 @@ export const useStore = create<StoreState>((set: any) => ({
       });
 
       const updatedRentals = state.rentals.map((r: any) => {
-        if (r.workId === id && r.status === 'returned') {
-          return { ...r, status: 'active' as const };
+        if (r.workId === id && r.status === 'finalizado') {
+          return { ...r, status: 'iniciado' as const };
         }
         return r;
       });
@@ -454,12 +464,20 @@ export const useStore = create<StoreState>((set: any) => ({
       const obra = state.obras.find((o: any) => o.id === rental.workId);
       if (!obra) return state;
       
-      const calculatedTotal = rental.items.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
+      const now = new Date().toISOString();
+      const itemsWithDates = rental.items.map((item: any) => ({
+        ...item,
+        addedDate: item.addedDate || now,
+        dailyPrice: item.dailyPrice || item.unitPrice,
+      }));
+      
+      const calculatedTotal = itemsWithDates.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
       const pagado = 0;
       const resto = calculatedTotal;
       
       const newRental: Rental = {
         ...rental,
+        items: itemsWithDates,
         clientId: obra.clientId,
         clientName: obra.clientName,
         workName: obra.name,
@@ -467,7 +485,9 @@ export const useStore = create<StoreState>((set: any) => ({
         pagado: pagado,
         resto: resto,
         id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
+        createdAt: now,
+        status: 'sin presupuestar',
+        notes: rental.notes || '',
       };
       
       const updatedProducts = state.products.map((product: any) => {
@@ -517,12 +537,19 @@ export const useStore = create<StoreState>((set: any) => ({
       const rental = state.rentals.find((r: any) => r.id === id);
       if (!rental) return state;
 
-      const calculatedTotal = items.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
+      const now = new Date().toISOString();
+      const itemsWithDates = items.map((item: any) => ({
+        ...item,
+        addedDate: item.addedDate || now,
+        dailyPrice: item.dailyPrice || item.unitPrice,
+      }));
+
+      const calculatedTotal = itemsWithDates.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
       const resto = Math.max(0, calculatedTotal - rental.pagado);
 
       const updatedProducts = state.products.map((product: any) => {
         const oldItem = rental.items.find((i: any) => i.productId === product.id);
-        const newItem = items.find((i: any) => i.productId === product.id);
+        const newItem = itemsWithDates.find((i: any) => i.productId === product.id);
         
         let stockChange = 0;
         if (oldItem && newItem) {
@@ -544,7 +571,7 @@ export const useStore = create<StoreState>((set: any) => ({
 
       const updatedRentals = state.rentals.map((r: any) =>
         r.id === id
-          ? { ...r, items, totalPrice: calculatedTotal, resto }
+          ? { ...r, items: itemsWithDates, totalPrice: calculatedTotal, resto }
           : r
       );
 
@@ -580,10 +607,26 @@ export const useStore = create<StoreState>((set: any) => ({
     }));
   },
   
+  updateRentalStatus: (id, status) => {
+    set((state: any) => ({
+      rentals: state.rentals.map((r: any) =>
+        r.id === id ? { ...r, status } : r
+      ),
+    }));
+  },
+
+  updateRentalNotes: (id, notes) => {
+    set((state: any) => ({
+      rentals: state.rentals.map((r: any) =>
+        r.id === id ? { ...r, notes } : r
+      ),
+    }));
+  },
+
   returnRental: (id) => {
     set((state: any) => {
       const rental = state.rentals.find((r: any) => r.id === id);
-      if (!rental || rental.status === 'returned') return state;
+      if (!rental || rental.status === 'finalizado') return state;
       
       const updatedProducts = state.products.map((product: any) => {
         const item = rental.items.find((i: any) => i.productId === product.id);
@@ -599,7 +642,7 @@ export const useStore = create<StoreState>((set: any) => ({
       return {
         rentals: state.rentals.map((r: any) =>
           r.id === id 
-            ? { ...r, status: 'returned' as const, pagado: r.totalPrice, resto: 0 }
+            ? { ...r, status: 'finalizado' as const, pagado: r.totalPrice, resto: 0 }
             : r
         ),
         products: updatedProducts,
@@ -610,7 +653,7 @@ export const useStore = create<StoreState>((set: any) => ({
   reactivateRental: (id) => {
     set((state: any) => {
       const rental = state.rentals.find((r: any) => r.id === id);
-      if (!rental || rental.status === 'active') return state;
+      if (!rental || rental.status === 'iniciado') return state;
       
       const updatedProducts = state.products.map((product: any) => {
         const item = rental.items.find((i: any) => i.productId === product.id);
@@ -626,7 +669,7 @@ export const useStore = create<StoreState>((set: any) => ({
       return {
         rentals: state.rentals.map((r: any) =>
           r.id === id 
-            ? { ...r, status: 'active' as const }
+            ? { ...r, status: 'iniciado' as const }
             : r
         ),
         products: updatedProducts,
@@ -637,7 +680,7 @@ export const useStore = create<StoreState>((set: any) => ({
   partialReturn: (rentalId, itemsToReturn) => {
     set((state: any) => {
       const rental = state.rentals.find((r: any) => r.id === rentalId);
-      if (!rental || rental.status === 'returned') return state;
+      if (!rental || rental.status === 'finalizado') return state;
       
       const updatedProducts = state.products.map((product: any) => {
         const returnItem = itemsToReturn.find((i) => i.productId === product.id);
@@ -666,7 +709,7 @@ export const useStore = create<StoreState>((set: any) => ({
         })
         .filter(Boolean) as RentalItem[];
       
-      const newStatus = updatedItems.length === 0 ? 'returned' : 'active';
+      const newStatus = updatedItems.length === 0 ? 'finalizado' : 'iniciado';
       
       return {
         rentals: state.rentals.map((r: any) =>
