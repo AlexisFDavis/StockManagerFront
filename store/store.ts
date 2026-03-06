@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Product, Rental, Client, RentalItem, Obra } from '@/types';
+import { Product, Rental, Client, RentalItem, Obra, StockMovement } from '@/types';
 
 interface StoreState {
   products: Product[];
@@ -32,6 +32,9 @@ interface StoreState {
   returnRental: (id: string) => void;
   reactivateRental: (id: string) => void;
   partialReturn: (rentalId: string, itemsToReturn: { productId: string; quantity: number }[]) => void;
+  
+  stockMovements: StockMovement[];
+  getStockMovementsByObra: (obraId: string) => StockMovement[];
   
   isAuthenticated: boolean;
   login: () => void;
@@ -228,12 +231,17 @@ const initialRentals: Rental[] = [
   },
 ];
 
-export const useStore = create<StoreState>((set: any) => ({
+export const useStore = create<StoreState>((set: any, get: any) => ({
   products: initialProducts,
   clients: initialClients,
   obras: initialObras,
   rentals: initialRentals,
+  stockMovements: [] as StockMovement[],
   isAuthenticated: false,
+  
+  getStockMovementsByObra: (obraId: string) => {
+    return get().stockMovements.filter((m: StockMovement) => m.obraId === obraId);
+  },
   
   addProduct: (product) => {
     const newProduct: Product = {
@@ -363,6 +371,8 @@ export const useStore = create<StoreState>((set: any) => ({
       if (!obra) return state;
 
       const obraRentals = state.rentals.filter((r: any) => r.workId === id && r.status === 'iniciado');
+      const now = new Date().toISOString();
+      const newMovements: StockMovement[] = [];
       
       const updatedProducts = state.products.map((product: any) => {
         let stockToReturn = 0;
@@ -373,6 +383,17 @@ export const useStore = create<StoreState>((set: any) => ({
           }
         });
         if (stockToReturn > 0) {
+          newMovements.push({
+            id: Date.now().toString() + '-' + product.id + '-entrada',
+            obraId: id,
+            obraName: obra.name,
+            productId: product.id,
+            productName: product.name,
+            quantity: stockToReturn,
+            type: 'entrada',
+            reason: 'Obra finalizada - Devolución de productos',
+            timestamp: now,
+          });
           return {
             ...product,
             stockActual: Math.min(product.stockTotal, product.stockActual + stockToReturn),
@@ -400,6 +421,7 @@ export const useStore = create<StoreState>((set: any) => ({
         ),
         rentals: updatedRentals,
         products: updatedProducts,
+        stockMovements: [...state.stockMovements, ...newMovements],
       };
     });
   },
@@ -418,6 +440,8 @@ export const useStore = create<StoreState>((set: any) => ({
       if (!obra || obra.status === 'active') return state;
 
       const obraRentals = state.rentals.filter((r: any) => r.workId === id);
+      const now = new Date().toISOString();
+      const newMovements: StockMovement[] = [];
       
       const updatedProducts = state.products.map((product: any) => {
         let stockNeeded = 0;
@@ -428,6 +452,17 @@ export const useStore = create<StoreState>((set: any) => ({
           }
         });
         if (stockNeeded > 0) {
+          newMovements.push({
+            id: Date.now().toString() + '-' + product.id + '-salida',
+            obraId: id,
+            obraName: obra.name,
+            productId: product.id,
+            productName: product.name,
+            quantity: stockNeeded,
+            type: 'salida',
+            reason: 'Obra reactivada - Reasignación de productos',
+            timestamp: now,
+          });
           return {
             ...product,
             stockActual: Math.max(0, product.stockActual - stockNeeded),
@@ -449,6 +484,7 @@ export const useStore = create<StoreState>((set: any) => ({
         ),
         rentals: updatedRentals,
         products: updatedProducts,
+        stockMovements: [...state.stockMovements, ...newMovements],
       };
     });
   },
@@ -490,9 +526,22 @@ export const useStore = create<StoreState>((set: any) => ({
         notes: rental.notes || '',
       };
       
+      const newMovements: StockMovement[] = [];
       const updatedProducts = state.products.map((product: any) => {
         const item = rental.items.find((i: any) => i.productId === product.id);
         if (item) {
+          newMovements.push({
+            id: Date.now().toString() + '-' + product.id,
+            obraId: rental.workId,
+            obraName: obra.name,
+            rentalId: newRental.id,
+            productId: product.id,
+            productName: product.name,
+            quantity: item.quantity,
+            type: 'salida',
+            reason: 'Alquiler creado',
+            timestamp: now,
+          });
           return {
             ...product,
             stockActual: Math.max(0, product.stockActual - item.quantity),
@@ -508,6 +557,7 @@ export const useStore = create<StoreState>((set: any) => ({
       return {
         rentals: [...state.rentals, newRental],
         products: updatedProducts,
+        stockMovements: [...state.stockMovements, ...newMovements],
         obras: state.obras.map((o: any) =>
           o.id === rental.workId
             ? { ...o, totalPrice: obraTotalPrice, resto: obraResto }
@@ -547,6 +597,7 @@ export const useStore = create<StoreState>((set: any) => ({
       const calculatedTotal = itemsWithDates.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
       const resto = Math.max(0, calculatedTotal - rental.pagado);
 
+      const newMovements: StockMovement[] = [];
       const updatedProducts = state.products.map((product: any) => {
         const oldItem = rental.items.find((i: any) => i.productId === product.id);
         const newItem = itemsWithDates.find((i: any) => i.productId === product.id);
@@ -561,6 +612,34 @@ export const useStore = create<StoreState>((set: any) => ({
         }
 
         if (stockChange !== 0) {
+          const obra = state.obras.find((o: any) => o.id === rental.workId);
+          if (stockChange > 0) {
+            newMovements.push({
+              id: Date.now().toString() + '-' + product.id + '-entrada',
+              obraId: rental.workId,
+              obraName: obra?.name || rental.workName,
+              rentalId: rental.id,
+              productId: product.id,
+              productName: product.name,
+              quantity: stockChange,
+              type: 'entrada',
+              reason: 'Productos editados en alquiler',
+              timestamp: now,
+            });
+          } else {
+            newMovements.push({
+              id: Date.now().toString() + '-' + product.id + '-salida',
+              obraId: rental.workId,
+              obraName: obra?.name || rental.workName,
+              rentalId: rental.id,
+              productId: product.id,
+              productName: product.name,
+              quantity: Math.abs(stockChange),
+              type: 'salida',
+              reason: 'Productos editados en alquiler',
+              timestamp: now,
+            });
+          }
           return {
             ...product,
             stockActual: Math.max(0, Math.min(product.stockTotal, product.stockActual + stockChange)),
@@ -583,6 +662,7 @@ export const useStore = create<StoreState>((set: any) => ({
       return {
         rentals: updatedRentals,
         products: updatedProducts,
+        stockMovements: [...state.stockMovements, ...newMovements],
         obras: state.obras.map((o: any) =>
           o.id === rental.workId
             ? { ...o, totalPrice: obraTotalPrice, resto: obraResto }
@@ -628,9 +708,24 @@ export const useStore = create<StoreState>((set: any) => ({
       const rental = state.rentals.find((r: any) => r.id === id);
       if (!rental || rental.status === 'finalizado') return state;
       
+      const now = new Date().toISOString();
+      const newMovements: StockMovement[] = [];
       const updatedProducts = state.products.map((product: any) => {
         const item = rental.items.find((i: any) => i.productId === product.id);
         if (item) {
+          const obra = state.obras.find((o: any) => o.id === rental.workId);
+          newMovements.push({
+            id: Date.now().toString() + '-' + product.id + '-entrada',
+            obraId: rental.workId,
+            obraName: obra?.name || rental.workName,
+            rentalId: rental.id,
+            productId: product.id,
+            productName: product.name,
+            quantity: item.quantity,
+            type: 'entrada',
+            reason: 'Devolución completa de alquiler',
+            timestamp: now,
+          });
           return {
             ...product,
             stockActual: Math.min(product.stockTotal, product.stockActual + item.quantity),
@@ -646,6 +741,7 @@ export const useStore = create<StoreState>((set: any) => ({
             : r
         ),
         products: updatedProducts,
+        stockMovements: [...state.stockMovements, ...newMovements],
       };
     });
   },
@@ -655,9 +751,24 @@ export const useStore = create<StoreState>((set: any) => ({
       const rental = state.rentals.find((r: any) => r.id === id);
       if (!rental || rental.status === 'iniciado') return state;
       
+      const now = new Date().toISOString();
+      const newMovements: StockMovement[] = [];
       const updatedProducts = state.products.map((product: any) => {
         const item = rental.items.find((i: any) => i.productId === product.id);
         if (item) {
+          const obra = state.obras.find((o: any) => o.id === rental.workId);
+          newMovements.push({
+            id: Date.now().toString() + '-' + product.id + '-salida',
+            obraId: rental.workId,
+            obraName: obra?.name || rental.workName,
+            rentalId: rental.id,
+            productId: product.id,
+            productName: product.name,
+            quantity: item.quantity,
+            type: 'salida',
+            reason: 'Reactivación de alquiler',
+            timestamp: now,
+          });
           return {
             ...product,
             stockActual: Math.max(0, product.stockActual - item.quantity),
@@ -673,6 +784,7 @@ export const useStore = create<StoreState>((set: any) => ({
             : r
         ),
         products: updatedProducts,
+        stockMovements: [...state.stockMovements, ...newMovements],
       };
     });
   },
@@ -682,9 +794,24 @@ export const useStore = create<StoreState>((set: any) => ({
       const rental = state.rentals.find((r: any) => r.id === rentalId);
       if (!rental || rental.status === 'finalizado') return state;
       
+      const now = new Date().toISOString();
+      const newMovements: StockMovement[] = [];
       const updatedProducts = state.products.map((product: any) => {
         const returnItem = itemsToReturn.find((i) => i.productId === product.id);
         if (returnItem) {
+          const obra = state.obras.find((o: any) => o.id === rental.workId);
+          newMovements.push({
+            id: Date.now().toString() + '-' + product.id + '-entrada',
+            obraId: rental.workId,
+            obraName: obra?.name || rental.workName,
+            rentalId: rental.id,
+            productId: product.id,
+            productName: product.name,
+            quantity: returnItem.quantity,
+            type: 'entrada',
+            reason: 'Devolución parcial de alquiler',
+            timestamp: now,
+          });
           return {
             ...product,
             stockActual: Math.min(product.stockTotal, product.stockActual + returnItem.quantity),
@@ -718,6 +845,7 @@ export const useStore = create<StoreState>((set: any) => ({
             : r
         ),
         products: updatedProducts,
+        stockMovements: [...state.stockMovements, ...newMovements],
       };
     });
   },

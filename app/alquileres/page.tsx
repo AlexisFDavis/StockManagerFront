@@ -68,6 +68,9 @@ export default function AlquileresPage() {
   const [billingDateFrom, setBillingDateFrom] = useState('');
   const [billingDateTo, setBillingDateTo] = useState('');
   const [billingMode, setBillingMode] = useState<'custom' | 'month' | 'todate'>('todate');
+  const [discountType, setDiscountType] = useState<'item' | 'total' | 'none'>('none');
+  const [itemDiscounts, setItemDiscounts] = useState<Record<string, { type: 'percent' | 'amount'; value: number }>>({});
+  const [totalDiscount, setTotalDiscount] = useState<{ type: 'percent' | 'amount'; value: number }>({ type: 'percent', value: 0 });
 
   // Filters
   const [searchText, setSearchText] = useState('');
@@ -185,6 +188,9 @@ export default function AlquileresPage() {
     const today = new Date().toISOString().split('T')[0];
     setBillingDateFrom(rental.createdAt.split('T')[0]);
     setBillingDateTo(today);
+    setDiscountType('none');
+    setItemDiscounts({});
+    setTotalDiscount({ type: 'percent', value: 0 });
     setIsBillingOpen(true);
   };
 
@@ -575,13 +581,52 @@ export default function AlquileresPage() {
 
     const items = selectedRental.items.map((item: any) => {
       const billing = calculateBillingForItem(item, fromDate, toDate);
-      return { ...item, ...billing };
+      let subtotal = billing.total;
+      let discount = 0;
+      
+      // Aplicar descuento por ítem si está activo
+      if (discountType === 'item' && itemDiscounts[item.productId]) {
+        const itemDiscount = itemDiscounts[item.productId];
+        if (itemDiscount.type === 'percent') {
+          discount = subtotal * (itemDiscount.value / 100);
+        } else {
+          discount = Math.min(itemDiscount.value, subtotal);
+        }
+        subtotal = subtotal - discount;
+      }
+      
+      return { 
+        ...item, 
+        ...billing, 
+        subtotal: billing.total,
+        discount,
+        total: subtotal
+      };
     });
 
-    const grandTotal = items.reduce((sum: number, item: any) => sum + item.total, 0);
+    let subtotal = items.reduce((sum: number, item: any) => sum + item.subtotal, 0);
+    let totalDiscountAmount = items.reduce((sum: number, item: any) => sum + item.discount, 0);
+    let grandTotal = items.reduce((sum: number, item: any) => sum + item.total, 0);
+    
+    // Aplicar descuento sobre el total si está activo
+    if (discountType === 'total' && totalDiscount.value > 0) {
+      if (totalDiscount.type === 'percent') {
+        totalDiscountAmount = subtotal * (totalDiscount.value / 100);
+      } else {
+        totalDiscountAmount = Math.min(totalDiscount.value, subtotal);
+      }
+      grandTotal = subtotal - totalDiscountAmount;
+    }
 
-    return { items, grandTotal, fromDate, toDate };
-  }, [selectedRental, isBillingOpen, billingMode, billingDateFrom, billingDateTo]);
+    return { 
+      items, 
+      subtotal,
+      totalDiscount: discountType === 'total' ? totalDiscountAmount : items.reduce((sum: number, item: any) => sum + item.discount, 0),
+      grandTotal, 
+      fromDate, 
+      toDate 
+    };
+  }, [selectedRental, isBillingOpen, billingMode, billingDateFrom, billingDateTo, discountType, itemDiscounts, totalDiscount]);
 
   return (
     <div className="space-y-6">
@@ -1337,20 +1382,57 @@ export default function AlquileresPage() {
                     </div>
                   </div>
 
+                  {/* Selector de tipo de descuento */}
+                  <div>
+                    <Text className="font-semibold text-gray-700 mb-2">Descuentos</Text>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => {
+                          setDiscountType('none');
+                          setItemDiscounts({});
+                          setTotalDiscount({ type: 'percent', value: 0 });
+                        }}
+                        className={`px-3 py-2 text-sm font-medium rounded-xl transition-all ${discountType === 'none' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      >
+                        Sin descuento
+                      </button>
+                      <button
+                        onClick={() => setDiscountType('item')}
+                        className={`px-3 py-2 text-sm font-medium rounded-xl transition-all ${discountType === 'item' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      >
+                        Por ítem
+                      </button>
+                      <button
+                        onClick={() => setDiscountType('total')}
+                        className={`px-3 py-2 text-sm font-medium rounded-xl transition-all ${discountType === 'total' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      >
+                        Sobre el total
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Detalle por producto */}
                   <div className="border border-gray-200 rounded-xl divide-y overflow-hidden">
-                    <div className="grid grid-cols-5 gap-2 p-3 bg-gray-100 text-xs font-semibold text-gray-600">
+                    <div className={`grid gap-2 p-3 bg-gray-100 text-xs font-semibold text-gray-600 ${discountType === 'item' ? 'grid-cols-7' : 'grid-cols-5'}`}>
                       <span className="col-span-1">Producto</span>
                       <span className="text-center">Cant.</span>
                       <span className="text-center">Precio/día</span>
                       <span className="text-center">Días</span>
-                      <span className="text-right">Subtotal</span>
+                      {discountType === 'item' && (
+                        <>
+                          <span className="text-center">Descuento</span>
+                          <span className="text-right">Subtotal</span>
+                        </>
+                      )}
+                      <span className="text-right">Total</span>
                     </div>
                     {billingDetails.items.map((item: any, idx: number) => {
                       const unitDailyPrice = item.dailyPrice || item.unitPrice;
                       const totalDailyPrice = unitDailyPrice * item.quantity;
+                      const itemDiscount = itemDiscounts[item.productId] || { type: 'percent', value: 0 };
+                      
                       return (
-                        <div key={idx} className="grid grid-cols-5 gap-2 p-3 items-center text-sm">
+                        <div key={idx} className={`grid gap-2 p-3 items-center text-sm ${discountType === 'item' ? 'grid-cols-7' : 'grid-cols-5'}`}>
                           <span className="col-span-1 font-medium text-gray-800 truncate">{item.productName}</span>
                           <span className="text-center text-gray-600">{item.quantity}</span>
                           <span className="text-center text-blue-600 text-xs">
@@ -1358,11 +1440,98 @@ export default function AlquileresPage() {
                             <div className="font-semibold">${totalDailyPrice.toLocaleString()}/día</div>
                           </span>
                           <span className="text-center text-gray-600">{item.days}</span>
-                          <span className="text-right font-semibold text-gray-900">${item.total.toLocaleString()}</span>
+                          {discountType === 'item' && (
+                            <div className="flex gap-1 items-center">
+                              <select
+                                value={itemDiscount.type}
+                                onChange={(e) => {
+                                  setItemDiscounts({
+                                    ...itemDiscounts,
+                                    [item.productId]: { ...itemDiscount, type: e.target.value as 'percent' | 'amount' }
+                                  });
+                                }}
+                                className="w-16 text-xs rounded border border-gray-300 px-1 py-1"
+                              >
+                                <option value="percent">%</option>
+                                <option value="amount">$</option>
+                              </select>
+                              <input
+                                type="number"
+                                min="0"
+                                max={itemDiscount.type === 'percent' ? 100 : item.subtotal}
+                                step={itemDiscount.type === 'percent' ? 1 : 0.01}
+                                value={itemDiscount.value || 0}
+                                onChange={(e) => {
+                                  const value = parseFloat(e.target.value) || 0;
+                                  setItemDiscounts({
+                                    ...itemDiscounts,
+                                    [item.productId]: { ...itemDiscount, value }
+                                  });
+                                }}
+                                className="w-20 text-xs rounded border border-gray-300 px-2 py-1"
+                                placeholder="0"
+                              />
+                            </div>
+                          )}
+                          {discountType === 'item' && (
+                            <span className="text-right text-sm text-gray-600">
+                              ${item.subtotal.toLocaleString()}
+                              {item.discount > 0 && (
+                                <span className="block text-xs text-red-600">-${item.discount.toLocaleString()}</span>
+                              )}
+                            </span>
+                          )}
+                          <span className="text-right font-semibold text-gray-900">
+                            ${item.total.toLocaleString()}
+                          </span>
                         </div>
                       );
                     })}
                   </div>
+
+                  {/* Descuento sobre el total */}
+                  {discountType === 'total' && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                      <Text className="font-semibold text-gray-700 mb-3">Descuento sobre el Total</Text>
+                      <div className="flex gap-3 items-center">
+                        <select
+                          value={totalDiscount.type}
+                          onChange={(e) => {
+                            setTotalDiscount({ ...totalDiscount, type: e.target.value as 'percent' | 'amount' });
+                          }}
+                          className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="percent">Porcentaje (%)</option>
+                          <option value="amount">Monto fijo ($)</option>
+                        </select>
+                        <input
+                          type="number"
+                          min="0"
+                          max={totalDiscount.type === 'percent' ? 100 : billingDetails.subtotal}
+                          step={totalDiscount.type === 'percent' ? 1 : 0.01}
+                          value={totalDiscount.value || 0}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            setTotalDiscount({ ...totalDiscount, value });
+                          }}
+                          className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                          placeholder={totalDiscount.type === 'percent' ? '0%' : '$0'}
+                        />
+                      </div>
+                      {billingDetails.totalDiscount > 0 && (
+                        <div className="mt-3 pt-3 border-t border-yellow-300">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Subtotal:</span>
+                            <span className="font-semibold">${billingDetails.subtotal.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between text-sm text-red-600">
+                            <span>Descuento:</span>
+                            <span className="font-semibold">-${billingDetails.totalDiscount.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Total */}
                   <div className="bg-blue-50 rounded-xl p-4">
@@ -1370,10 +1539,21 @@ export default function AlquileresPage() {
                       <div>
                         <Text className="font-bold text-lg text-blue-900">Total a Cobrar</Text>
                         <Text className="text-xs text-blue-600">
-                          (Precio unitario/día × cantidad × días transcurridos desde adición de cada producto)
+                          {discountType === 'none' 
+                            ? '(Precio unitario/día × cantidad × días transcurridos desde adición de cada producto)'
+                            : discountType === 'item'
+                            ? '(Subtotal con descuentos por ítem aplicados)'
+                            : '(Subtotal con descuento sobre el total aplicado)'}
                         </Text>
                       </div>
-                      <Text className="text-2xl font-bold text-blue-700">${billingDetails.grandTotal.toLocaleString()}</Text>
+                      <div className="text-right">
+                        {billingDetails.subtotal !== billingDetails.grandTotal && (
+                          <Text className="text-sm text-gray-500 line-through">
+                            ${billingDetails.subtotal.toLocaleString()}
+                          </Text>
+                        )}
+                        <Text className="text-2xl font-bold text-blue-700">${billingDetails.grandTotal.toLocaleString()}</Text>
+                      </div>
                     </div>
                     <div className="mt-3 pt-3 border-t border-blue-200 flex justify-between text-sm">
                       <span className="text-blue-700">Ya pagado: ${(selectedRental.pagado || 0).toLocaleString()}</span>

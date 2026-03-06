@@ -11,7 +11,7 @@ import {
   Badge,
   Metric,
 } from '@tremor/react';
-import { Obra } from '@/types';
+import { Obra, StockMovement } from '@/types';
 import { format } from 'date-fns';
 
 export default function ObrasPage() {
@@ -31,10 +31,25 @@ export default function ObrasPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditPaymentOpen, setIsEditPaymentOpen] = useState(false);
   const [isReactivateOpen, setIsReactivateOpen] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [editingObra, setEditingObra] = useState<Obra | null>(null);
   const [selectedObra, setSelectedObra] = useState<Obra | null>(null);
   const [pagado, setPagado] = useState(0);
   const [missingProducts, setMissingProducts] = useState<{ productId: string; productName: string; needed: number; current: number; missing: number }[]>([]);
+  const getStockMovementsByObra = useStore((state: any) => state.getStockMovementsByObra);
+  
+  const toggleNotes = (movementId: string) => {
+    setExpandedNotes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(movementId)) {
+        newSet.delete(movementId);
+      } else {
+        newSet.add(movementId);
+      }
+      return newSet;
+    });
+  };
   const [formData, setFormData] = useState({
     clientId: '',
     name: '',
@@ -421,6 +436,15 @@ export default function ObrasPage() {
                   )}
                   <div className="flex gap-2">
                     <button
+                      onClick={() => {
+                        setSelectedObra(obra);
+                        setIsDetailsOpen(true);
+                      }}
+                      className="px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all shadow-sm hover:shadow-md"
+                    >
+                      🔍 Detalles
+                    </button>
+                    <button
                       onClick={() => openEditDialog(obra)}
                       className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md"
                     >
@@ -675,6 +699,156 @@ export default function ObrasPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de Detalles - Historial de Movimientos de Stock */}
+      {isDetailsOpen && selectedObra && (() => {
+        const movements = getStockMovementsByObra(selectedObra.id);
+        const sortedMovements = [...movements].sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        
+        return (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-4"
+            style={{ 
+              minHeight: '100vh',
+              height: '100vh',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflowY: 'auto'
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setIsDetailsOpen(false);
+              }
+            }}
+          >
+            <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl p-6 my-auto max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <Title className="text-2xl font-bold">Historial de Movimientos de Stock</Title>
+                  <Text className="text-gray-600 mt-1">Obra: {selectedObra.name}</Text>
+                </div>
+                <button
+                  onClick={() => setIsDetailsOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+
+              {sortedMovements.length === 0 ? (
+                <div className="text-center py-12">
+                  <Text className="text-gray-400 text-4xl mb-3">📦</Text>
+                  <Text className="text-gray-500">No hay movimientos de stock registrados para esta obra</Text>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Text className="text-xs text-gray-500 uppercase">Total Movimientos</Text>
+                        <Text className="text-2xl font-bold text-gray-900">{sortedMovements.length}</Text>
+                      </div>
+                      <div>
+                        <Text className="text-xs text-gray-500 uppercase">Último Movimiento</Text>
+                        <Text className="text-sm font-semibold text-gray-700">
+                          {sortedMovements.length > 0 
+                            ? format(new Date(sortedMovements[0].timestamp), 'dd/MM/yyyy HH:mm')
+                            : 'N/A'}
+                        </Text>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl divide-y max-h-96 overflow-y-auto">
+                    {sortedMovements.map((movement: StockMovement) => (
+                      <div
+                        key={movement.id}
+                        className={`p-4 hover:bg-gray-50 transition-colors ${
+                          movement.type === 'salida' ? 'bg-red-50/30' : 'bg-green-50/30'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <Badge
+                                color={movement.type === 'salida' ? 'red' : 'green'}
+                                size="lg"
+                              >
+                                {movement.type === 'salida' ? '↓ Salida' : '↑ Entrada'}
+                              </Badge>
+                              <Text className="font-semibold text-gray-900">{movement.productName}</Text>
+                              <Text className="text-gray-600">×{movement.quantity}</Text>
+                            </div>
+                            <div className="space-y-1">
+                              <Text className="text-sm text-gray-600">
+                                <span className="font-medium">Razón:</span> {movement.reason}
+                              </Text>
+                              {movement.rentalId && (() => {
+                                const rental = rentals.find((r: any) => r.id === movement.rentalId);
+                                const hasNotes = rental && rental.notes && rental.notes.trim() !== '';
+                                const isExpanded = expandedNotes.has(movement.id);
+                                
+                                return (
+                                  <div className="mt-2">
+                                    {hasNotes ? (
+                                      <div>
+                                        <button
+                                          onClick={() => toggleNotes(movement.id)}
+                                          className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                                        >
+                                          <span>{isExpanded ? '▼' : '▶'}</span>
+                                          <span>Notas del Alquiler</span>
+                                        </button>
+                                        {isExpanded && (
+                                          <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                            <Text className="text-sm text-gray-700 whitespace-pre-wrap">
+                                              {rental.notes}
+                                            </Text>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <Text className="text-xs text-gray-400 italic">
+                                        Sin notas en el alquiler
+                                      </Text>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                              <Text className="text-xs text-gray-500">
+                                {format(new Date(movement.timestamp), 'dd/MM/yyyy HH:mm:ss')}
+                              </Text>
+                            </div>
+                          </div>
+                          <div className="text-right ml-4">
+                            <Text className={`text-lg font-bold ${
+                              movement.type === 'salida' ? 'text-red-600' : 'text-green-600'
+                            }`}>
+                              {movement.type === 'salida' ? '-' : '+'}{movement.quantity}
+                            </Text>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-4 mt-6 border-t">
+                <button
+                  onClick={() => setIsDetailsOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

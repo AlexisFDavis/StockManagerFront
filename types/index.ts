@@ -56,3 +56,16 @@ export interface Obra {
   status: 'active' | 'completed' | 'paused';
   createdAt: string;
 }
+
+export interface StockMovement {
+  id: string;
+  obraId: string;
+  obraName: string;
+  rentalId?: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  type: 'salida' | 'entrada';
+  reason: string;
+  timestamp: string;
+}
