@@ -6,15 +6,15 @@ import { useStore } from '@/store/store';
 
 export default function Home() {
   const router = useRouter();
-  const isAuthenticated = useStore((state: any) => state.isAuthenticated);
+  const currentUser = useStore((state: any) => state.currentUser);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (currentUser) {
       router.push('/dashboard');
     } else {
       router.push('/login');
     }
-  }, [isAuthenticated, router]);
+  }, [currentUser, router]);
 
   return null;
 }

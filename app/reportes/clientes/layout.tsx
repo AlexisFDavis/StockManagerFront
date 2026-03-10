@@ -8,15 +8,15 @@ import PageHeader from '@/components/PageHeader';
 
 export default function ReportesClientesLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const isAuthenticated = useStore((state: any) => state.isAuthenticated);
+  const currentUser = useStore((state: any) => state.currentUser);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!currentUser) {
       router.push('/login');
     }
-  }, [isAuthenticated, router]);
+  }, [currentUser, router]);
 
-  if (!isAuthenticated) {
+  if (!currentUser) {
     return null;
   }
 

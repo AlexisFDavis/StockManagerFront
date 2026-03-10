@@ -1,18 +1,35 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/store';
 import { Card, Title, TextInput, Button, Text } from '@tremor/react';
-import { login } from '@/lib/api-client';
+import { login, getCurrentUser } from '@/lib/api-client';
 
 export default function LoginPage() {
   const router = useRouter();
   const setUser = useStore((state: any) => state.setUser);
+  const currentUser = useStore((state: any) => state.currentUser);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Verificar si ya hay sesión activa
+  useEffect(() => {
+    async function checkSession() {
+      try {
+        const user = await getCurrentUser();
+        if (user) {
+          setUser(user);
+          router.push('/dashboard');
+        }
+      } catch (error) {
+        // No hay sesión activa, continuar en login
+      }
+    }
+    checkSession();
+  }, [setUser, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,4 +97,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

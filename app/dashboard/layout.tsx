@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/store';
+import { getCurrentUser } from '@/lib/api-client';
 import Sidebar from '@/components/Sidebar';
 import PageHeader from '@/components/PageHeader';
 
@@ -12,15 +13,37 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const isAuthenticated = useStore((state: any) => state.isAuthenticated);
+  const currentUser = useStore((state: any) => state.currentUser);
+  const setUser = useStore((state: any) => state.setUser);
+  const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, router]);
+    async function checkSession() {
+      // Si ya hay usuario en el store, no hacer nada
+      if (currentUser) {
+        setIsChecking(false);
+        return;
+      }
 
-  if (!isAuthenticated) {
+      // Intentar obtener usuario desde la cookie
+      try {
+        const user = await getCurrentUser();
+        if (user) {
+          setUser(user);
+        } else {
+          router.push('/login');
+        }
+      } catch (error) {
+        router.push('/login');
+      } finally {
+        setIsChecking(false);
+      }
+    }
+
+    checkSession();
+  }, [currentUser, setUser, router]);
+
+  if (isChecking || !currentUser) {
     return null;
   }
 
@@ -36,4 +59,3 @@ export default function DashboardLayout({
     </div>
   );
 }
-

@@ -75,8 +75,12 @@ export async function logout() {
 
 // Obtener usuario actual
 export async function getCurrentUser() {
-  return apiGet<{ id: string; name: string; username: string } | null>(
-    'auth/me'
-  )
+  try {
+    return await apiGet<{ id: string; name: string; username: string }>(
+      'auth/me'
+    )
+  } catch (error) {
+    return null
+  }
 }
 

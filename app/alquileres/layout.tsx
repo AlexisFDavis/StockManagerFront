@@ -12,15 +12,15 @@ export default function AlquileresLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const isAuthenticated = useStore((state: any) => state.isAuthenticated);
+  const currentUser = useStore((state: any) => state.currentUser);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!currentUser) {
       router.push('/login');
     }
-  }, [isAuthenticated, router]);
+  }, [currentUser, router]);
 
-  if (!isAuthenticated) {
+  if (!currentUser) {
     return null;
   }
 
