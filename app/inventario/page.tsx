@@ -341,8 +341,10 @@ export default function InventarioPage() {
                 value={formData.lowStockThreshold.toString()}
                 onChange={(e) => setFormData({ ...formData, lowStockThreshold: parseInt(e.target.value) || 20 })}
                 placeholder="20"
-                helperText="El producto se considerará con stock bajo cuando el stock actual esté por debajo de este valor"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                El producto se considerará con stock bajo cuando el stock actual esté por debajo de este valor
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
