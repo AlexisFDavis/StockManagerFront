@@ -34,8 +34,7 @@ export async function POST(
         date: new Date(),
         periodFrom: new Date(periodFrom),
         periodTo: new Date(periodTo),
-        notes: notes || null,
-        createdById: user.id
+        notes: notes || null
       }
     })
     
