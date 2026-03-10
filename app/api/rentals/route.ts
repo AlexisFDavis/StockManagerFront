@@ -34,11 +34,11 @@ export async function GET(request: NextRequest) {
     })
     
     // Transformar para incluir nombres
-    const rentalsWithNames = rentals.map(rental => ({
+    const rentalsWithNames = rentals.map((rental: any) => ({
       ...rental,
       workName: rental.obra.name,
       clientName: rental.client.name,
-      items: rental.items.map(item => ({
+      items: rental.items.map((item: any) => ({
         ...item,
         productName: item.product.name
       }))
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       ...rental,
       workName: rental.obra.name,
       clientName: rental.client.name,
-      items: rental.items.map(item => ({
+      items: rental.items.map((item: any) => ({
         ...item,
         productName: item.product.name
       }))

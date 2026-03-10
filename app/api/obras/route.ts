@@ -12,7 +12,7 @@ export async function GET() {
     })
     
     // Transformar para incluir clientName
-    const obrasWithClientName = obras.map(obra => ({
+    const obrasWithClientName = obras.map((obra: any) => ({
       ...obra,
       clientName: obra.client.name
     }))
