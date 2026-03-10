@@ -1,3 +1,10 @@
+export interface StockAddHistory {
+  id: string;
+  quantity: number;
+  date: string;
+  notes?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -6,6 +13,8 @@ export interface Product {
   stockActual: number;
   price: number;
   notes?: string;
+  lowStockThreshold?: number; // Umbral de stock bajo (por defecto 20)
+  addHistory?: StockAddHistory[]; // Historial de añadidos de stock
 }
 
 export interface RentalItem {
@@ -16,6 +25,15 @@ export interface RentalItem {
   dailyPrice: number;
   totalPrice: number;
   addedDate: string;
+}
+
+export interface PaymentHistory {
+  id: string;
+  amount: number;
+  date: string;
+  periodFrom: string;
+  periodTo: string;
+  notes?: string;
 }
 
 export interface Rental {
@@ -32,6 +50,7 @@ export interface Rental {
   createdAt: string;
   status: 'sin presupuestar' | 'presupuestado' | 'iniciado' | 'finalizado';
   notes?: string;
+  paymentHistory?: PaymentHistory[];
 }
 
 export interface Client {

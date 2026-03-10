@@ -1,0 +1,167 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id              String   @id @default(uuid())
+  name            String
+  description     String?
+  stockTotal      Int      @default(0)
+  stockActual     Int      @default(0)
+  price           Float
+  notes           String?
+  lowStockThreshold Int?   @default(20)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relaciones
+  stockAddHistory StockAddHistory[]
+  rentalItems     RentalItem[]
+  stockMovements   StockMovement[]
+}
+
+model StockAddHistory {
+  id        String   @id @default(uuid())
+  productId String
+  quantity  Int
+  date      DateTime @default(now())
+  notes     String?
+  
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@index([productId])
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relaciones
+  obras     Obra[]
+  rentals   Rental[]
+}
+
+model Obra {
+  id          String   @id @default(uuid())
+  clientId    String
+  name        String
+  description String?
+  address     String?
+  totalPrice  Float    @default(0)
+  pagado      Float    @default(0)
+  resto       Float    @default(0)
+  status      String   @default("active") // active, completed, paused
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relaciones
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  rentals     Rental[]
+  stockMovements StockMovement[]
+  
+  @@index([clientId])
+  @@index([status])
+}
+
+model Rental {
+  id            String   @id @default(uuid())
+  workId         String
+  clientId       String
+  totalPrice     Float    @default(0)
+  pagado         Float    @default(0)
+  resto          Float    @default(0)
+  returnDate     DateTime
+  status         String   @default("sin presupuestar") // sin presupuestar, presupuestado, iniciado, finalizado
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relaciones
+  obra           Obra     @relation(fields: [workId], references: [id], onDelete: Cascade)
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  items          RentalItem[]
+  paymentHistory PaymentHistory[]
+  stockMovements StockMovement[]
+  
+  @@index([workId])
+  @@index([clientId])
+  @@index([status])
+}
+
+model RentalItem {
+  id          String   @id @default(uuid())
+  rentalId    String
+  productId   String
+  quantity    Int
+  unitPrice   Float
+  dailyPrice  Float
+  totalPrice  Float
+  addedDate   DateTime
+  
+  // Relaciones
+  rental      Rental   @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([rentalId])
+  @@index([productId])
+}
+
+model PaymentHistory {
+  id        String   @id @default(uuid())
+  rentalId  String
+  amount    Float
+  date      DateTime @default(now())
+  periodFrom DateTime
+  periodTo   DateTime
+  notes     String?
+  
+  // Relaciones
+  rental    Rental   @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@index([rentalId])
+}
+
+model StockMovement {
+  id          String   @id @default(uuid())
+  obraId      String
+  rentalId    String?
+  productId   String
+  quantity    Int
+  type        String   // salida, entrada
+  reason      String
+  timestamp   DateTime @default(now())
+  
+  // Relaciones
+  obra        Obra     @relation(fields: [obraId], references: [id], onDelete: Cascade)
+  rental      Rental?  @relation(fields: [rentalId], references: [id], onDelete: SetNull)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([obraId])
+  @@index([rentalId])
+  @@index([productId])
+  @@index([timestamp])
+}
+

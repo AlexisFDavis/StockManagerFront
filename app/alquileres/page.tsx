@@ -1,4 +1,4 @@
-'use client';
+                                      'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/store/store';
@@ -35,8 +35,10 @@ export default function AlquileresPage() {
   const updateRental = useStore((state: any) => state.updateRental);
   const updateRentalItems = useStore((state: any) => state.updateRentalItems);
   const updateRentalPayment = useStore((state: any) => state.updateRentalPayment);
+  const recordRentalPayment = useStore((state: any) => state.recordRentalPayment);
   const updateRentalStatus = useStore((state: any) => state.updateRentalStatus);
   const updateRentalNotes = useStore((state: any) => state.updateRentalNotes);
+  const transferStockBetweenObras = useStore((state: any) => state.transferStockBetweenObras);
 
   // Dialog states
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -47,6 +49,10 @@ export default function AlquileresPage() {
   const [isReactivateOpen, setIsReactivateOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isBillingOpen, setIsBillingOpen] = useState(false);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [transferFromObra, setTransferFromObra] = useState('');
+  const [transferToObra, setTransferToObra] = useState('');
+  const [transferItems, setTransferItems] = useState<{ productId: string; productName: string; quantity: number }[]>([]);
 
   const [selectedRental, setSelectedRental] = useState<any>(null);
   const [editField, setEditField] = useState<{ field: string; value: any }>({ field: '', value: '' });
@@ -67,7 +73,7 @@ export default function AlquileresPage() {
   // Billing modal
   const [billingDateFrom, setBillingDateFrom] = useState('');
   const [billingDateTo, setBillingDateTo] = useState('');
-  const [billingMode, setBillingMode] = useState<'custom' | 'month' | 'todate'>('todate');
+  const [billingMode, setBillingMode] = useState<'custom' | 'month' | 'todate' | 'vencimiento'>('vencimiento');
   const [discountType, setDiscountType] = useState<'item' | 'total' | 'none'>('none');
   const [itemDiscounts, setItemDiscounts] = useState<Record<string, { type: 'percent' | 'amount'; value: number }>>({});
   const [totalDiscount, setTotalDiscount] = useState<{ type: 'percent' | 'amount'; value: number }>({ type: 'percent', value: 0 });
@@ -184,10 +190,13 @@ export default function AlquileresPage() {
 
   const openBillingDialog = (rental: any) => {
     setSelectedRental(rental);
-    setBillingMode('todate');
-    const today = new Date().toISOString().split('T')[0];
-    setBillingDateFrom(rental.createdAt.split('T')[0]);
-    setBillingDateTo(today);
+    setBillingMode('vencimiento');
+    // Para modo vencimiento, desde la fecha de devolución actual
+    const returnDate = new Date(rental.returnDate);
+    const nextMonth = new Date(returnDate);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    setBillingDateFrom(rental.returnDate.split('T')[0]);
+    setBillingDateTo(nextMonth.toISOString().split('T')[0]);
     setDiscountType('none');
     setItemDiscounts({});
     setTotalDiscount({ type: 'percent', value: 0 });
@@ -343,63 +352,70 @@ export default function AlquileresPage() {
     const product = products.find((p: any) => p.id === productId);
     if (!product) return;
 
-    const existingItem = editingRentalItems.find((item) => item.productId === productId);
-    if (existingItem) {
-      if (existingItem.quantity < product.stockActual) {
-        const newQuantity = existingItem.quantity + 1;
-        setEditingRentalItems(
-          editingRentalItems.map((item) =>
-            item.productId === productId
-              ? { ...item, quantity: newQuantity, totalPrice: newQuantity * item.unitPrice }
-              : item
-          )
-        );
-      }
-    } else {
-      if (product.stockActual > 0) {
-        setEditingRentalItems([...editingRentalItems, {
-          productId: product.id,
-          productName: product.name,
-          quantity: 1,
-          unitPrice: product.price,
-          dailyPrice: product.price,
-          totalPrice: product.price,
-          addedDate: new Date().toISOString(),
-        }]);
-      }
+    // Verificar stock total disponible (sumando todos los items del mismo producto)
+    const totalQuantityInRental = editingRentalItems
+      .filter((item) => item.productId === productId)
+      .reduce((sum, item) => sum + item.quantity, 0);
+
+    if (totalQuantityInRental < product.stockActual) {
+      // Siempre crear un nuevo item, incluso si ya existe uno del mismo producto
+      // Esto permite tener items del mismo producto con diferentes fechas de adición
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0]; // Solo la fecha, sin hora
+      
+      setEditingRentalItems([...editingRentalItems, {
+        productId: product.id,
+        productName: product.name,
+        quantity: 1,
+        unitPrice: product.price,
+        dailyPrice: product.price,
+        totalPrice: product.price,
+        addedDate: new Date(todayStr).toISOString(), // Fecha actual como fecha de adición
+      }]);
     }
   };
 
-  const removeItemFromEditingRental = (productId: string) => {
-    setEditingRentalItems(editingRentalItems.filter((item) => item.productId !== productId));
+  const removeItemFromEditingRental = (itemIndex: number) => {
+    setEditingRentalItems(editingRentalItems.filter((_, index) => index !== itemIndex));
   };
 
-  const updateEditingItemQuantity = (productId: string, quantity: number) => {
-    const product = products.find((p: any) => p.id === productId);
-    if (!product || quantity < 1 || quantity > product.stockActual) return;
+  const updateEditingItemQuantity = (itemIndex: number, quantity: number) => {
+    const item = editingRentalItems[itemIndex];
+    if (!item || quantity < 1) return;
+    
+    const product = products.find((p: any) => p.id === item.productId);
+    if (!product) return;
+    
+    // Verificar stock total disponible (sumando todos los items del mismo producto excepto el actual)
+    const totalQuantityInRental = editingRentalItems
+      .filter((i, idx) => i.productId === item.productId && idx !== itemIndex)
+      .reduce((sum, i) => sum + i.quantity, 0);
+    
+    if (quantity + totalQuantityInRental > product.stockActual) return;
+    
     setEditingRentalItems(
-      editingRentalItems.map((item) =>
-        item.productId === productId
-          ? { ...item, quantity, totalPrice: quantity * item.unitPrice }
-          : item
+      editingRentalItems.map((i, idx) =>
+        idx === itemIndex
+          ? { ...i, quantity, totalPrice: quantity * i.unitPrice }
+          : i
       )
     );
   };
 
-  const updateEditingItemDailyPrice = (productId: string, dailyPrice: number) => {
+  const updateEditingItemDailyPrice = (itemIndex: number, dailyPrice: number) => {
     setEditingRentalItems(
-      editingRentalItems.map((item) =>
-        item.productId === productId
+      editingRentalItems.map((item, idx) =>
+        idx === itemIndex
           ? { ...item, dailyPrice: Math.max(0, dailyPrice) }
           : item
       )
     );
   };
 
-  const updateEditingItemAddedDate = (productId: string, addedDate: string) => {
+  const updateEditingItemAddedDate = (itemIndex: number, addedDate: string) => {
     setEditingRentalItems(
-      editingRentalItems.map((item) =>
-        item.productId === productId
+      editingRentalItems.map((item, idx) =>
+        idx === itemIndex
           ? { ...item, addedDate: new Date(addedDate).toISOString() }
           : item
       )
@@ -567,7 +583,14 @@ export default function AlquileresPage() {
     let fromDate: Date;
     let toDate: Date;
     
-    if (billingMode === 'todate') {
+    if (billingMode === 'vencimiento') {
+      // Desde la fecha de devolución actual hasta un mes después
+      const returnDate = new Date(selectedRental.returnDate);
+      fromDate = new Date(returnDate);
+      const nextMonth = new Date(returnDate);
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      toDate = nextMonth;
+    } else if (billingMode === 'todate') {
       fromDate = new Date(selectedRental.createdAt);
       toDate = new Date();
     } else if (billingMode === 'month') {
@@ -632,6 +655,14 @@ export default function AlquileresPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div></div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setIsTransferOpen(true)}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg"
+          >
+            <span className="text-lg">🔄</span>
+            Traslado
+          </button>
         <button
           onClick={openAddDialog}
           className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg"
@@ -639,6 +670,7 @@ export default function AlquileresPage() {
           <span className="text-lg">+</span>
           Nuevo Alquiler
         </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -699,7 +731,7 @@ export default function AlquileresPage() {
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all shadow-sm"
+                  className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all shadow-sm"
             />
           </div>
           <div>
@@ -708,7 +740,7 @@ export default function AlquileresPage() {
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all shadow-sm"
+                  className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all shadow-sm"
             />
           </div>
         </div>
@@ -727,30 +759,30 @@ export default function AlquileresPage() {
             {/* Desktop table */}
             <div className="hidden lg:block overflow-x-auto">
               <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableHeaderCell className="text-left">Obra</TableHeaderCell>
-                    <TableHeaderCell className="text-left">Cliente</TableHeaderCell>
-                    <TableHeaderCell className="text-left">Productos</TableHeaderCell>
+            <TableHead>
+              <TableRow>
+                <TableHeaderCell className="text-left">Obra</TableHeaderCell>
+                <TableHeaderCell className="text-left">Cliente</TableHeaderCell>
+                <TableHeaderCell className="text-left">Productos</TableHeaderCell>
                     <TableHeaderCell className="text-left">Precio/Día</TableHeaderCell>
                     <TableHeaderCell className="text-left">F. Devolución</TableHeaderCell>
-                    <TableHeaderCell className="text-left">Total</TableHeaderCell>
-                    <TableHeaderCell className="text-left">Pagado</TableHeaderCell>
-                    <TableHeaderCell className="text-left">Resto</TableHeaderCell>
-                    <TableHeaderCell className="text-left">Estado</TableHeaderCell>
-                    <TableHeaderCell className="text-left">Acciones</TableHeaderCell>
-                  </TableRow>
-                </TableHead>
+                <TableHeaderCell className="text-left">Total</TableHeaderCell>
+                <TableHeaderCell className="text-left">Pagado</TableHeaderCell>
+                <TableHeaderCell className="text-left">Resto</TableHeaderCell>
+                <TableHeaderCell className="text-left">Estado</TableHeaderCell>
+                <TableHeaderCell className="text-left">Acciones</TableHeaderCell>
+              </TableRow>
+            </TableHead>
                 <TableBody>
                   {filteredRentals.map((rental: any) => {
                     const dailyTotal = calculateDailyTotal(rental);
                     const toDateTotal = calculateToDateBilling(rental);
                     const nextAction = getNextStatusAction(rental);
                     return (
-                      <TableRow key={rental.id}>
+                  <TableRow key={rental.id}>
                         <TableCell className="font-medium text-sm">{rental.workName}</TableCell>
-                        <TableCell className="text-gray-600 text-sm">{rental.clientName}</TableCell>
-                        <TableCell>
+                    <TableCell className="text-gray-600 text-sm">{rental.clientName}</TableCell>
+                    <TableCell>
                           <div className="space-y-1">
                             {rental.items.map((item: any, idx: number) => (
                               <div key={idx} className="text-xs text-gray-600">
@@ -917,13 +949,13 @@ export default function AlquileresPage() {
                     {/* Productos con fecha de adición */}
                     <div className="space-y-1 pt-2 border-t border-gray-100">
                       <Text className="text-xs font-semibold text-gray-500 uppercase">Productos</Text>
-                      {rental.items.map((item: any, idx: number) => (
+                          {rental.items.map((item: any, idx: number) => (
                         <div key={idx} className="flex justify-between text-sm">
                           <span className="text-gray-700">{item.productName} ×{item.quantity}</span>
                           <span className="text-gray-400 text-xs">desde {format(new Date(item.addedDate), 'dd/MM/yy')}</span>
                         </div>
-                      ))}
-                    </div>
+                          ))}
+                        </div>
 
                     {/* Precio por día */}
                     <div className="flex items-center justify-between pt-2 border-t border-gray-100">
@@ -980,12 +1012,12 @@ export default function AlquileresPage() {
 
                     <div className="flex flex-col gap-2 pt-2">
                       <div className="grid grid-cols-2 gap-2">
-                        <button
+                          <button
                           onClick={() => openDetailsDialog(rental)}
                           className="px-3 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all"
-                        >
+                          >
                           🔍 Detalles
-                        </button>
+                          </button>
                         {(rental.status === 'iniciado' || rental.status === 'presupuestado') && (
                           <button
                             onClick={() => openBillingDialog(rental)}
@@ -996,7 +1028,7 @@ export default function AlquileresPage() {
                         )}
                       </div>
                       {nextAction && (
-                        <button
+                          <button
                           onClick={() => handleStatusChange(rental.id, nextAction.nextStatus)}
                           className={`w-full px-3 py-2 text-sm font-medium text-white rounded-xl transition-all shadow-sm ${
                             nextAction.color === 'blue' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'
@@ -1050,61 +1082,61 @@ export default function AlquileresPage() {
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 my-auto max-h-[90vh] overflow-y-auto">
             <Title className="text-xl font-bold mb-6">Nuevo Alquiler</Title>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Obra</label>
-                <select
-                  value={selectedWorkId}
-                  onChange={(e) => setSelectedWorkId(e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all shadow-sm"
-                  required
-                >
-                  <option value="">Seleccionar obra...</option>
-                  {obras.filter((o: any) => o.status === 'active').map((obra: any) => (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Obra</label>
+              <select
+                value={selectedWorkId}
+                onChange={(e) => setSelectedWorkId(e.target.value)}
+                className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all shadow-sm"
+                required
+              >
+                <option value="">Seleccionar obra...</option>
+                {obras.filter((o: any) => o.status === 'active').map((obra: any) => (
                     <option key={obra.id} value={obra.id}>{obra.name} - {obra.clientName}</option>
-                  ))}
-                </select>
-              </div>
+                ))}
+              </select>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Productos Disponibles</label>
-                <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg divide-y">
-                  {availableProducts.map((product: any) => (
-                    <div key={product.id} className="flex justify-between items-center p-2 hover:bg-gray-50">
-                      <div>
-                        <Text className="font-medium text-sm">{product.name}</Text>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Productos Disponibles</label>
+              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg divide-y">
+                {availableProducts.map((product: any) => (
+                  <div key={product.id} className="flex justify-between items-center p-2 hover:bg-gray-50">
+                    <div>
+                      <Text className="font-medium text-sm">{product.name}</Text>
                         <Text className="text-xs text-gray-500">Stock: {product.stockActual} | ${product.price}/día</Text>
-                      </div>
-                      <button type="button" onClick={() => addItemToRental(product.id)} className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition-colors">
-                        Agregar
-                      </button>
                     </div>
-                  ))}
-                </div>
+                      <button type="button" onClick={() => addItemToRental(product.id)} className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition-colors">
+                      Agregar
+                    </button>
+                  </div>
+                ))}
               </div>
+            </div>
 
-              {rentalItems.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Seleccionados</label>
-                  <div className="border border-gray-200 rounded-lg divide-y">
-                    {rentalItems.map((item: any) => {
-                      const product = products.find((p: any) => p.id === item.productId);
-                      return (
+            {rentalItems.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Seleccionados</label>
+                <div className="border border-gray-200 rounded-lg divide-y">
+                  {rentalItems.map((item: any) => {
+                    const product = products.find((p: any) => p.id === item.productId);
+                    return (
                         <div key={item.productId} className="p-3 bg-blue-50 space-y-2">
                           <div className="flex items-center justify-between">
-                            <Text className="font-medium text-sm">{item.productName}</Text>
+                          <Text className="font-medium text-sm">{item.productName}</Text>
                             <button type="button" onClick={() => removeItemFromRental(item.productId)} className="px-2 py-1 text-xs text-red-600 hover:bg-red-100 rounded">Quitar</button>
                           </div>
                           <div className="flex items-center gap-3 flex-wrap">
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">Cant:</span>
-                              <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity - 1)} disabled={item.quantity <= 1} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">-</button>
-                              <input
+                            <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity - 1)} disabled={item.quantity <= 1} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">-</button>
+                            <input
                                 type="number" min="1" max={product?.stockActual || 0} value={item.quantity}
                                 onChange={(e) => updateItemQuantity(item.productId, Math.max(1, Math.min(product?.stockActual || 0, parseInt(e.target.value) || 1)))}
                                 className="w-14 text-sm text-center border border-gray-300 rounded px-1 py-0.5 focus:border-blue-500 focus:outline-none"
-                              />
-                              <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity + 1)} disabled={item.quantity >= (product?.stockActual || 0)} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">+</button>
-                            </div>
+                            />
+                            <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity + 1)} disabled={item.quantity >= (product?.stockActual || 0)} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">+</button>
+                          </div>
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">$/día:</span>
                               <input
@@ -1112,7 +1144,7 @@ export default function AlquileresPage() {
                                 onChange={(e) => updateItemDailyPrice(item.productId, parseFloat(e.target.value) || 0)}
                                 className="w-20 text-sm text-center border border-gray-300 rounded px-1 py-0.5 focus:border-blue-500 focus:outline-none"
                               />
-                            </div>
+                        </div>
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">Fecha adición:</span>
                               <input
@@ -1124,21 +1156,21 @@ export default function AlquileresPage() {
                             </div>
                             <Text className="text-xs text-gray-500">Total: ${item.totalPrice.toLocaleString()}</Text>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Devolución</label>
-                <input
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Devolución</label>
+              <input
                   type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)}
                   min={new Date().toISOString().split('T')[0]} required
-                  className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none shadow-sm"
-                />
-              </div>
+                className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none shadow-sm"
+              />
+            </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
@@ -1153,7 +1185,7 @@ export default function AlquileresPage() {
               <div className="bg-gray-50 rounded-lg p-3 space-y-1">
                 <div className="flex justify-between items-center">
                   <Text className="font-medium text-gray-700">Total (presupuesto)</Text>
-                  <Text className="text-xl font-bold">${calculatedTotal.toLocaleString()}</Text>
+              <Text className="text-xl font-bold">${calculatedTotal.toLocaleString()}</Text>
                 </div>
                 <div className="flex justify-between items-center">
                   <Text className="text-sm text-gray-500">Precio diario total</Text>
@@ -1165,13 +1197,13 @@ export default function AlquileresPage() {
                     <Text className="text-sm font-semibold">{getDaysUntilReturn(returnDate)} días</Text>
                   </div>
                 )}
-              </div>
+            </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t">
+            <div className="flex justify-end gap-3 pt-4 border-t">
                 <button type="button" onClick={() => setIsDialogOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all shadow-sm">Cancelar</button>
                 <button type="submit" disabled={!selectedWorkId || rentalItems.length === 0} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md disabled:opacity-50">Crear Alquiler</button>
-              </div>
-            </form>
+            </div>
+          </form>
           </div>
         </div>
       )}
@@ -1286,6 +1318,48 @@ export default function AlquileresPage() {
                 </div>
               </div>
 
+              {/* Historial de Cobranzas */}
+              <div>
+                <Text className="font-semibold text-gray-700 mb-3">Historial de Cobranzas</Text>
+                {selectedRental.paymentHistory && selectedRental.paymentHistory.length > 0 ? (
+                  <div className="border border-gray-200 rounded-xl divide-y overflow-hidden">
+                    <div className="grid grid-cols-5 gap-2 p-3 bg-gray-100 text-xs font-semibold text-gray-600">
+                      <span className="col-span-1">Fecha</span>
+                      <span className="text-center">Período</span>
+                      <span className="text-center">Monto</span>
+                      <span className="text-center">Notas</span>
+                      <span className="text-right">Acción</span>
+                    </div>
+                    {selectedRental.paymentHistory.map((payment: any) => (
+                      <div key={payment.id} className="grid grid-cols-5 gap-2 p-3 items-center text-sm">
+                        <span className="col-span-1 text-gray-700">{format(new Date(payment.date), 'dd/MM/yyyy')}</span>
+                        <span className="text-center text-gray-600 text-xs">
+                          {format(new Date(payment.periodFrom), 'dd/MM/yyyy')} - {format(new Date(payment.periodTo), 'dd/MM/yyyy')}
+                        </span>
+                        <span className="text-center font-semibold text-green-600">${payment.amount.toLocaleString()}</span>
+                        <span className="text-center text-gray-500 text-xs">{payment.notes || '-'}</span>
+                        <span className="text-right">
+                          <button
+                            onClick={() => {
+                              if (confirm('¿Eliminar este registro de cobranza?')) {
+                                // TODO: Implementar eliminación de pago
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-800 text-xs"
+                          >
+                            Eliminar
+                          </button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-gray-400 border border-gray-200 rounded-xl">
+                    <Text>No hay registros de cobranza</Text>
+                  </div>
+                )}
+              </div>
+
               {/* Notas */}
               <div>
                 <Text className="font-semibold text-gray-700 mb-2">Notas</Text>
@@ -1331,7 +1405,20 @@ export default function AlquileresPage() {
               {/* Modo de cálculo */}
               <div>
                 <Text className="font-semibold text-gray-700 mb-2">Modo de Cálculo</Text>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <button
+                    onClick={() => {
+                      setBillingMode('vencimiento');
+                      const returnDate = new Date(selectedRental.returnDate);
+                      const nextMonth = new Date(returnDate);
+                      nextMonth.setMonth(nextMonth.getMonth() + 1);
+                      setBillingDateFrom(selectedRental.returnDate.split('T')[0]);
+                      setBillingDateTo(nextMonth.toISOString().split('T')[0]);
+                    }}
+                    className={`px-3 py-2 text-sm font-medium rounded-xl transition-all ${billingMode === 'vencimiento' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                  >
+                    Vencimiento
+                  </button>
                   <button
                     onClick={() => setBillingMode('todate')}
                     className={`px-3 py-2 text-sm font-medium rounded-xl transition-all ${billingMode === 'todate' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
@@ -1572,7 +1659,12 @@ export default function AlquileresPage() {
                 {billingDetails && (
                   <button
                     onClick={() => {
-                      updateRentalPayment(selectedRental.id, billingDetails.grandTotal);
+                      recordRentalPayment(
+                        selectedRental.id,
+                        billingDetails.grandTotal,
+                        billingDetails.fromDate.toISOString(),
+                        billingDetails.toDate.toISOString()
+                      );
                       setIsBillingOpen(false);
                     }}
                     className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-md"
@@ -1595,34 +1687,34 @@ export default function AlquileresPage() {
         >
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6">
             <Title className="text-xl font-bold mb-6">Devolución Parcial</Title>
-            {selectedRental && (
-              <div className="space-y-4">
-                <Text className="text-gray-600 text-sm">Cantidad a devolver:</Text>
-                <div className="space-y-2">
-                  {selectedRental.items.map((item: any, idx: number) => (
-                    <div key={item.productId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <Text className="font-medium text-sm">{item.productName}</Text>
-                        <Text className="text-xs text-gray-500">Alquilado: {item.quantity}</Text>
-                      </div>
-                      <input
-                        type="number" min="0" max={item.quantity}
-                        value={partialReturnItems[idx]?.quantity || 0}
-                        onChange={(e) => {
-                          const val = Math.min(item.quantity, Math.max(0, parseInt(e.target.value) || 0));
-                          setPartialReturnItems(prev => prev.map((p, i) => i === idx ? { ...p, quantity: val } : p));
-                        }}
-                        className="w-16 rounded border border-gray-300 px-2 py-1 text-center text-sm"
-                      />
+          {selectedRental && (
+            <div className="space-y-4">
+              <Text className="text-gray-600 text-sm">Cantidad a devolver:</Text>
+              <div className="space-y-2">
+                {selectedRental.items.map((item: any, idx: number) => (
+                  <div key={item.productId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <Text className="font-medium text-sm">{item.productName}</Text>
+                      <Text className="text-xs text-gray-500">Alquilado: {item.quantity}</Text>
                     </div>
-                  ))}
-                </div>
-                <div className="flex justify-end gap-3 pt-4 border-t">
+                    <input
+                        type="number" min="0" max={item.quantity}
+                      value={partialReturnItems[idx]?.quantity || 0}
+                      onChange={(e) => {
+                        const val = Math.min(item.quantity, Math.max(0, parseInt(e.target.value) || 0));
+                        setPartialReturnItems(prev => prev.map((p, i) => i === idx ? { ...p, quantity: val } : p));
+                      }}
+                      className="w-16 rounded border border-gray-300 px-2 py-1 text-center text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t">
                   <button onClick={() => setIsPartialReturnOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all">Cancelar</button>
                   <button onClick={handlePartialReturn} className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-md">Confirmar</button>
-                </div>
               </div>
-            )}
+            </div>
+          )}
           </div>
         </div>
       )}
@@ -1681,39 +1773,45 @@ export default function AlquileresPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Productos del Alquiler</label>
                   <div className="border border-gray-200 rounded-lg divide-y">
-                    {editingRentalItems.map((item: any) => {
+                    {editingRentalItems.map((item: any, itemIndex: number) => {
                       const product = products.find((p: any) => p.id === item.productId);
+                      // Calcular stock disponible para este producto (total stock - cantidad ya en otros items del mismo producto)
+                      const totalQuantityInRental = editingRentalItems
+                        .filter((i, idx) => i.productId === item.productId && idx !== itemIndex)
+                        .reduce((sum, i) => sum + i.quantity, 0);
+                      const availableStock = (product?.stockActual || 0) - totalQuantityInRental;
+                      
                       return (
-                        <div key={item.productId} className="p-3 bg-blue-50 space-y-2">
+                        <div key={`${item.productId}-${itemIndex}-${item.addedDate}`} className="p-3 bg-blue-50 space-y-2">
                           <div className="flex items-center justify-between">
                             <Text className="font-medium text-sm">{item.productName}</Text>
-                            <button type="button" onClick={() => removeItemFromEditingRental(item.productId)} className="px-2 py-1 text-xs text-red-600 hover:bg-red-100 rounded">Quitar</button>
+                            <button type="button" onClick={() => removeItemFromEditingRental(itemIndex)} className="px-2 py-1 text-xs text-red-600 hover:bg-red-100 rounded">Quitar</button>
                           </div>
                           <div className="flex items-center gap-3 flex-wrap">
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">Cant:</span>
-                              <button type="button" onClick={() => updateEditingItemQuantity(item.productId, item.quantity - 1)} disabled={item.quantity <= 1} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">-</button>
+                              <button type="button" onClick={() => updateEditingItemQuantity(itemIndex, item.quantity - 1)} disabled={item.quantity <= 1} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">-</button>
                               <input
-                                type="number" min="1" max={product?.stockActual || 0} value={item.quantity}
-                                onChange={(e) => updateEditingItemQuantity(item.productId, Math.max(1, Math.min(product?.stockActual || 0, parseInt(e.target.value) || 1)))}
+                                type="number" min="1" max={availableStock + item.quantity} value={item.quantity}
+                                onChange={(e) => updateEditingItemQuantity(itemIndex, Math.max(1, Math.min(availableStock + item.quantity, parseInt(e.target.value) || 1)))}
                                 className="w-14 text-sm text-center border border-gray-300 rounded px-1 py-0.5 focus:border-blue-500 focus:outline-none"
                               />
-                              <button type="button" onClick={() => updateEditingItemQuantity(item.productId, item.quantity + 1)} disabled={item.quantity >= (product?.stockActual || 0)} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">+</button>
+                              <button type="button" onClick={() => updateEditingItemQuantity(itemIndex, item.quantity + 1)} disabled={item.quantity >= (availableStock + item.quantity)} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">+</button>
                             </div>
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">$/día:</span>
                               <input
                                 type="number" min="0" value={item.dailyPrice || item.unitPrice}
-                                onChange={(e) => updateEditingItemDailyPrice(item.productId, parseFloat(e.target.value) || 0)}
+                                onChange={(e) => updateEditingItemDailyPrice(itemIndex, parseFloat(e.target.value) || 0)}
                                 className="w-20 text-sm text-center border border-gray-300 rounded px-1 py-0.5 focus:border-blue-500 focus:outline-none"
                               />
-                            </div>
+                          </div>
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">Fecha adición:</span>
                               <input
                                 type="date"
                                 value={item.addedDate ? new Date(item.addedDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
-                                onChange={(e) => updateEditingItemAddedDate(item.productId, e.target.value)}
+                                onChange={(e) => updateEditingItemAddedDate(itemIndex, e.target.value)}
                                 className="text-xs border border-gray-300 rounded px-2 py-0.5 focus:border-blue-500 focus:outline-none"
                               />
                             </div>
@@ -1810,6 +1908,225 @@ export default function AlquileresPage() {
               <div className="flex justify-end gap-2 pt-4 border-t">
                 <button onClick={() => setIsReactivateOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all">Cancelar</button>
                 <button onClick={handleAddMissingProducts} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md">Agregar Productos y Reactivar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============ MODAL: Traslado entre Obras ============ */}
+      {isTransferOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-4"
+          style={{ minHeight: '100vh', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflowY: 'auto' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setIsTransferOpen(false); }}
+        >
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6 my-auto max-h-[90vh] overflow-y-auto">
+            <Title className="text-xl font-bold mb-4">Traslado entre Obras</Title>
+            
+            <div className="space-y-5">
+              {/* Selección de obras */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Obra Origen</label>
+                  <select
+                    value={transferFromObra}
+                    onChange={(e) => {
+                      setTransferFromObra(e.target.value);
+                      setTransferItems([]);
+                    }}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">Seleccionar obra...</option>
+                    {obras.filter((o: any) => o.status === 'active').map((obra: any) => (
+                      <option key={obra.id} value={obra.id}>{obra.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Obra Destino</label>
+                  <select
+                    value={transferToObra}
+                    onChange={(e) => setTransferToObra(e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">Seleccionar obra...</option>
+                    {obras.filter((o: any) => o.status === 'active' && o.id !== transferFromObra).map((obra: any) => (
+                      <option key={obra.id} value={obra.id}>{obra.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Productos disponibles en obra origen */}
+              {transferFromObra && (
+                <div>
+                  <Text className="font-semibold text-gray-700 mb-3">Productos Disponibles en Obra Origen</Text>
+                  {(() => {
+                    const fromRental = rentals.find((r: any) => r.workId === transferFromObra && r.status === 'iniciado');
+                    if (!fromRental || fromRental.items.length === 0) {
+                      return <Text className="text-gray-500 text-sm">No hay productos en esta obra</Text>;
+                    }
+                    return (
+                      <div className="border border-gray-200 rounded-xl divide-y max-h-60 overflow-y-auto">
+                        {fromRental.items.map((item: any) => {
+                          const existingTransfer = transferItems.find((ti: any) => ti.productId === item.productId);
+                          const currentTransferQty = existingTransfer?.quantity || 0;
+                          const availableQuantity = item.quantity; // Cantidad total disponible
+                          const remainingQuantity = availableQuantity - currentTransferQty;
+                          return (
+                            <div key={item.productId} className="p-3 flex justify-between items-center">
+                              <div className="flex-1">
+                                <Text className="font-medium text-sm">{item.productName}</Text>
+                          <Text className="text-xs text-gray-500">
+                                  Total: {availableQuantity} | Trasladando: {currentTransferQty} | Disponible: {remainingQuantity}
+                          </Text>
+                        </div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={availableQuantity}
+                                  value={currentTransferQty}
+                                  onChange={(e) => {
+                                    const qty = Math.max(0, Math.min(availableQuantity, parseInt(e.target.value) || 0));
+                                    if (qty === 0) {
+                                      setTransferItems(transferItems.filter((ti: any) => ti.productId !== item.productId));
+                                    } else {
+                                      const existing = transferItems.find((ti: any) => ti.productId === item.productId);
+                                      if (existing) {
+                                        setTransferItems(transferItems.map((ti: any) => 
+                                          ti.productId === item.productId ? { ...ti, quantity: qty } : ti
+                                        ));
+                                      } else {
+                                        setTransferItems([...transferItems, {
+                                          productId: item.productId,
+                                          productName: item.productName,
+                                          quantity: qty,
+                                        }]);
+                                      }
+                                    }
+                                  }}
+                                  className="w-20 rounded-lg border border-gray-300 px-2 py-1 text-sm text-center"
+                                />
+                                <span className="text-xs text-gray-500">uds</span>
+                      </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Resumen del traslado */}
+              {transferItems.length > 0 && transferFromObra && transferToObra && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <Text className="font-semibold text-blue-900 mb-2">Resumen del Traslado</Text>
+                  <div className="space-y-2">
+                    {transferItems.map((item: any) => (
+                      <div key={item.productId} className="flex justify-between text-sm">
+                        <span>{item.productName}</span>
+                        <span className="font-semibold">{item.quantity} unidades</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              )}
+
+              {/* Botones */}
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button
+                  onClick={() => {
+                    setIsTransferOpen(false);
+                    setTransferFromObra('');
+                    setTransferToObra('');
+                    setTransferItems([]);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"
+                >
+                  Cancelar
+                </button>
+                {transferFromObra && transferToObra && transferItems.length > 0 && (
+                <button
+                    onClick={async () => {
+                      try {
+                        // Validar que no se trasladen más productos de los disponibles
+                        const fromRental = rentals.find((r: any) => r.workId === transferFromObra && r.status === 'iniciado');
+                        if (!fromRental) {
+                          alert('No se encontró el alquiler de la obra origen');
+                          return;
+                        }
+
+                        const invalidItems = transferItems.filter((transferItem: any) => {
+                          const rentalItem = fromRental.items.find((item: any) => item.productId === transferItem.productId);
+                          if (!rentalItem) return true;
+                          return transferItem.quantity > rentalItem.quantity;
+                        });
+
+                        if (invalidItems.length > 0) {
+                          alert(`No se pueden trasladar más productos de los disponibles:\n${invalidItems.map((item: any) => `- ${item.productName}: cantidad solicitada excede lo disponible`).join('\n')}`);
+                          return;
+                        }
+
+                        // Realizar el traslado
+                        transferStockBetweenObras(transferFromObra, transferToObra, transferItems);
+
+                        // Obtener datos de las obras
+                        const fromObra = obras.find((o: any) => o.id === transferFromObra);
+                        const toObra = obras.find((o: any) => o.id === transferToObra);
+                        const fromClient = clients.find((c: any) => c.id === fromObra?.clientId);
+                        const toClient = clients.find((c: any) => c.id === toObra?.clientId);
+
+                        // Generar remito de entrega (obra origen)
+                        const remitoEntrega: RemitoData = {
+                          fecha: format(new Date(), 'dd/MM/yyyy'),
+                          cliente: fromClient?.name || fromObra?.clientName || '',
+                          direccion: fromClient?.address || fromObra?.address || '',
+                          localidad: fromObra?.address || '',
+                          items: transferItems.map((item: any) => ({
+                            cantidad: item.quantity,
+                            descripcion: item.productName,
+                          })),
+                          transportista: toObra?.name || '',
+                          Domicilio: toObra?.address || '',
+                        };
+                        const pdfEntrega = await generarRemito(remitoEntrega);
+                        descargarPDF(pdfEntrega, `remito-entrega-${fromObra?.name.replace(/\s+/g, '-')}-${Date.now()}.pdf`);
+
+                        // Generar remito de recepción (obra destino)
+                        const remitoRecepcion: RemitoData = {
+                          fecha: format(new Date(), 'dd/MM/yyyy'),
+                          cliente: toClient?.name || toObra?.clientName || '',
+                          direccion: toClient?.address || toObra?.address || '',
+                          localidad: toObra?.address || '',
+                          items: transferItems.map((item: any) => ({
+                            cantidad: item.quantity,
+                            descripcion: item.productName,
+                          })),
+                          transportista: fromObra?.name || '',
+                          Domicilio: fromObra?.address || '',
+                        };
+                        const pdfRecepcion = await generarRemito(remitoRecepcion);
+                        descargarPDF(pdfRecepcion, `remito-recepcion-${toObra?.name.replace(/\s+/g, '-')}-${Date.now()}.pdf`);
+
+                        // Cerrar modal y limpiar
+                        setIsTransferOpen(false);
+                        setTransferFromObra('');
+                        setTransferToObra('');
+                        setTransferItems([]);
+                        alert('Traslado realizado exitosamente. Los remitos se han descargado.');
+                      } catch (error) {
+                        console.error('Error al realizar traslado:', error);
+                        alert('Error al realizar el traslado. Verifica los datos.');
+                      }
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-all shadow-md"
+                  >
+                    Realizar Traslado y Generar Remitos
+                </button>
+                )}
               </div>
             </div>
           </div>

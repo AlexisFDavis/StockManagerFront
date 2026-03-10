@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Product, Rental, Client, RentalItem, Obra, StockMovement } from '@/types';
+import { Product, Rental, Client, RentalItem, Obra, StockMovement, PaymentHistory, StockAddHistory } from '@/types';
 
 interface StoreState {
   products: Product[];
@@ -27,6 +27,7 @@ interface StoreState {
   updateRental: (id: string, rental: Partial<Rental>) => void;
   updateRentalItems: (id: string, items: RentalItem[]) => void;
   updateRentalPayment: (id: string, pagado: number) => void;
+  recordRentalPayment: (id: string, amount: number, periodFrom: string, periodTo: string, notes?: string) => void;
   updateRentalStatus: (id: string, status: Rental['status']) => void;
   updateRentalNotes: (id: string, notes: string) => void;
   returnRental: (id: string) => void;
@@ -35,6 +36,7 @@ interface StoreState {
   
   stockMovements: StockMovement[];
   getStockMovementsByObra: (obraId: string) => StockMovement[];
+  transferStockBetweenObras: (fromObraId: string, toObraId: string, items: { productId: string; quantity: number }[]) => void;
   
   isAuthenticated: boolean;
   login: () => void;
@@ -55,6 +57,13 @@ const initialProducts: Product[] = [
     stockTotal: 50,
     stockActual: 30,
     price: 200,
+    lowStockThreshold: 20,
+    addHistory: [{
+      id: '1-initial',
+      quantity: 50,
+      date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
+      notes: 'Producto creado',
+    }],
   },
   {
     id: '2',
@@ -63,6 +72,13 @@ const initialProducts: Product[] = [
     stockTotal: 30,
     stockActual: 25,
     price: 500,
+    lowStockThreshold: 20,
+    addHistory: [{
+      id: '2-initial',
+      quantity: 30,
+      date: new Date(Date.now() - 55 * 24 * 60 * 60 * 1000).toISOString(),
+      notes: 'Producto creado',
+    }],
   },
   {
     id: '3',
@@ -71,6 +87,13 @@ const initialProducts: Product[] = [
     stockTotal: 15,
     stockActual: 12,
     price: 1200,
+    lowStockThreshold: 20,
+    addHistory: [{
+      id: '3-initial',
+      quantity: 15,
+      date: new Date(Date.now() - 50 * 24 * 60 * 60 * 1000).toISOString(),
+      notes: 'Producto creado',
+    }],
   },
   {
     id: '4',
@@ -79,6 +102,13 @@ const initialProducts: Product[] = [
     stockTotal: 25,
     stockActual: 25,
     price: 350,
+    lowStockThreshold: 20,
+    addHistory: [{
+      id: '4-initial',
+      quantity: 25,
+      date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
+      notes: 'Producto creado',
+    }],
   },
   {
     id: '5',
@@ -87,6 +117,13 @@ const initialProducts: Product[] = [
     stockTotal: 8,
     stockActual: 8,
     price: 800,
+    lowStockThreshold: 20,
+    addHistory: [{
+      id: '5-initial',
+      quantity: 8,
+      date: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(),
+      notes: 'Producto creado',
+    }],
   },
 ];
 
@@ -242,12 +279,137 @@ export const useStore = create<StoreState>((set: any, get: any) => ({
   getStockMovementsByObra: (obraId: string) => {
     return get().stockMovements.filter((m: StockMovement) => m.obraId === obraId);
   },
+
+  transferStockBetweenObras: (fromObraId, toObraId, items) => {
+    set((state: any) => {
+      const fromObra = state.obras.find((o: any) => o.id === fromObraId);
+      const toObra = state.obras.find((o: any) => o.id === toObraId);
+      if (!fromObra || !toObra) return state;
+
+      const now = new Date().toISOString();
+      const newMovements: StockMovement[] = [];
+
+      // Encontrar alquileres activos de ambas obras
+      const fromRental = state.rentals.find((r: any) => r.workId === fromObraId && r.status === 'iniciado');
+      const toRental = state.rentals.find((r: any) => r.workId === toObraId && r.status === 'iniciado');
+
+      // Actualizar productos y crear movimientos
+      const updatedProducts = state.products.map((product: any) => {
+        const transferItem = items.find((item: any) => item.productId === product.id);
+        if (!transferItem || transferItem.quantity <= 0) return product;
+
+        // Movimiento de salida de obra origen
+        newMovements.push({
+          id: `${fromObraId}-${toObraId}-${product.id}-${Date.now()}-salida`,
+          obraId: fromObraId,
+          obraName: fromObra.name,
+          productId: product.id,
+          productName: product.name,
+          quantity: transferItem.quantity,
+          type: 'salida',
+          reason: `Traslado a obra: ${toObra.name}`,
+          timestamp: now,
+        });
+
+        // Movimiento de entrada a obra destino
+        newMovements.push({
+          id: `${fromObraId}-${toObraId}-${product.id}-${Date.now()}-entrada`,
+          obraId: toObraId,
+          obraName: toObra.name,
+          productId: product.id,
+          productName: product.name,
+          quantity: transferItem.quantity,
+          type: 'entrada',
+          reason: `Traslado desde obra: ${fromObra.name}`,
+          timestamp: now,
+        });
+
+        return product;
+      });
+
+      // Actualizar alquileres
+      const updatedRentals = state.rentals.map((rental: any) => {
+        // Quitar productos del alquiler de origen
+        if (rental.id === fromRental?.id) {
+          const updatedItems = rental.items.map((item: any) => {
+            const transferItem = items.find((i: any) => i.productId === item.productId);
+            if (transferItem) {
+              const newQuantity = Math.max(0, item.quantity - transferItem.quantity);
+              if (newQuantity === 0) {
+                return null; // Eliminar el ítem
+              }
+              return {
+                ...item,
+                quantity: newQuantity,
+                totalPrice: newQuantity * item.unitPrice,
+              };
+            }
+            return item;
+          }).filter((item: any) => item !== null);
+
+          return {
+            ...rental,
+            items: updatedItems,
+            totalPrice: updatedItems.reduce((sum: number, item: any) => sum + item.totalPrice, 0),
+          };
+        }
+
+        // Agregar productos al alquiler de destino
+        if (rental.id === toRental?.id) {
+          const updatedItems = [...rental.items];
+          items.forEach((transferItem: any) => {
+            const existingItem = updatedItems.find((item: any) => item.productId === transferItem.productId);
+            const product = state.products.find((p: any) => p.id === transferItem.productId);
+            if (existingItem) {
+              existingItem.quantity += transferItem.quantity;
+              existingItem.totalPrice = existingItem.quantity * existingItem.unitPrice;
+            } else if (product) {
+              updatedItems.push({
+                productId: product.id,
+                productName: product.name,
+                quantity: transferItem.quantity,
+                unitPrice: product.price,
+                dailyPrice: product.price,
+                totalPrice: transferItem.quantity * product.price,
+                addedDate: now,
+              });
+            }
+          });
+
+          return {
+            ...rental,
+            items: updatedItems,
+            totalPrice: updatedItems.reduce((sum: number, item: any) => sum + item.totalPrice, 0),
+          };
+        }
+
+        return rental;
+      });
+
+      return {
+        products: updatedProducts,
+        rentals: updatedRentals,
+        stockMovements: [...state.stockMovements, ...newMovements],
+      };
+    });
+  },
   
   addProduct: (product) => {
+    const productId = Date.now().toString();
+    const initialStock = product.stockTotal || 0;
+    const initialAddHistory: StockAddHistory = {
+      id: `${productId}-initial`,
+      quantity: initialStock,
+      date: new Date().toISOString(),
+      notes: 'Producto creado',
+    };
+    
     const newProduct: Product = {
       ...product,
-      id: Date.now().toString(),
-      stockActual: product.stockTotal || 0,
+      id: productId,
+      stockActual: initialStock,
+      lowStockThreshold: product.lowStockThreshold ?? 20,
+      addHistory: initialStock > 0 ? [initialAddHistory] : [],
     };
     set((state: any) => ({
       products: [...state.products, newProduct],
@@ -255,11 +417,50 @@ export const useStore = create<StoreState>((set: any, get: any) => ({
   },
   
   updateProduct: (id, product) => {
-    set((state: any) => ({
-      products: state.products.map((p: any) =>
-        p.id === id ? { ...p, ...product } : p
-      ),
-    }));
+    set((state: any) => {
+      const existingProduct = state.products.find((p: any) => p.id === id);
+      if (!existingProduct) return state;
+
+      // Detectar cambio en stockTotal
+      const oldStockTotal = existingProduct.stockTotal || 0;
+      const newStockTotal = product.stockTotal !== undefined ? product.stockTotal : oldStockTotal;
+      const stockDifference = newStockTotal - oldStockTotal;
+
+      // Calcular nuevo stockActual considerando productos alquilados
+      const activeRentals = state.rentals.filter((r: any) => r.status === 'iniciado');
+      const productRented = activeRentals.reduce((sum: number, rental: any) => {
+        const item = rental.items.find((i: any) => i.productId === id);
+        return sum + (item ? item.quantity : 0);
+      }, 0);
+      const newStockActual = Math.max(0, newStockTotal - productRented);
+
+      // Si hay cambio en el stock, registrar en el historial
+      let updatedHistory = existingProduct.addHistory || [];
+      if (stockDifference !== 0) {
+        const newAddEntry: StockAddHistory = {
+          id: `${id}-${Date.now()}`,
+          quantity: Math.abs(stockDifference),
+          date: new Date().toISOString(),
+          notes: stockDifference > 0 
+            ? `Añadido ${stockDifference} unidades (edición)` 
+            : `Reducido ${Math.abs(stockDifference)} unidades (edición)`,
+        };
+        updatedHistory = [...updatedHistory, newAddEntry];
+      }
+
+      return {
+        products: state.products.map((p: any) =>
+          p.id === id 
+            ? { 
+                ...p, 
+                ...product, 
+                stockActual: newStockActual,
+                addHistory: updatedHistory,
+              } 
+            : p
+        ),
+      };
+    });
   },
   
   deleteProduct: (id) => {
@@ -281,7 +482,25 @@ export const useStore = create<StoreState>((set: any, get: any) => ({
           if (p.id === id) {
             const newStockTotal = Math.max(0, p.stockTotal + quantity);
             const newStockActual = Math.max(0, newStockTotal - productRented);
-            return { ...p, stockTotal: newStockTotal, stockActual: newStockActual };
+            
+            // Si se añade stock (quantity > 0), registrar en el historial
+            let updatedHistory = p.addHistory || [];
+            if (quantity > 0) {
+              const newAddEntry: StockAddHistory = {
+                id: `${id}-${Date.now()}`,
+                quantity: quantity,
+                date: new Date().toISOString(),
+                notes: `Añadido ${quantity} unidades`,
+              };
+              updatedHistory = [...updatedHistory, newAddEntry];
+            }
+            
+            return { 
+              ...p, 
+              stockTotal: newStockTotal, 
+              stockActual: newStockActual,
+              addHistory: updatedHistory,
+            };
           }
           return p;
         }),
@@ -588,28 +807,61 @@ export const useStore = create<StoreState>((set: any, get: any) => ({
       if (!rental) return state;
 
       const now = new Date().toISOString();
-      const itemsWithDates = items.map((item: any) => ({
-        ...item,
-        addedDate: item.addedDate || now,
-        dailyPrice: item.dailyPrice || item.unitPrice,
-      }));
+      
+      // Procesar items: consolidar solo si tienen el mismo productId Y la misma fecha
+      // Si tienen diferentes fechas, mantenerlos separados
+      const processedItems: any[] = [];
+      const itemsByProductAndDate: Record<string, any[]> = {};
 
-      const calculatedTotal = itemsWithDates.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
+      items.forEach((item: any) => {
+        const addedDate = item.addedDate || now;
+        const key = `${item.productId}-${addedDate}`;
+        if (!itemsByProductAndDate[key]) {
+          itemsByProductAndDate[key] = [];
+        }
+        itemsByProductAndDate[key].push({
+          ...item,
+          addedDate: addedDate,
+          dailyPrice: item.dailyPrice || item.unitPrice,
+        });
+      });
+
+      // Consolidar items con el mismo productId y fecha
+      Object.keys(itemsByProductAndDate).forEach((key: string) => {
+        const itemsGroup = itemsByProductAndDate[key];
+        if (itemsGroup.length === 1) {
+          processedItems.push(itemsGroup[0]);
+        } else {
+          // Consolidar items del mismo producto y fecha
+          const firstItem = itemsGroup[0];
+          const totalQuantity = itemsGroup.reduce((sum: number, item: any) => sum + item.quantity, 0);
+          processedItems.push({
+            ...firstItem,
+            quantity: totalQuantity,
+            totalPrice: totalQuantity * firstItem.unitPrice,
+          });
+        }
+      });
+
+      const calculatedTotal = processedItems.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
       const resto = Math.max(0, calculatedTotal - rental.pagado);
 
+      // Calcular cambios de stock comparando items antiguos vs nuevos
       const newMovements: StockMovement[] = [];
+      const oldItemsByProduct = rental.items.reduce((acc: any, item: any) => {
+        acc[item.productId] = (acc[item.productId] || 0) + item.quantity;
+        return acc;
+      }, {});
+      
+      const newItemsByProduct = processedItems.reduce((acc: any, item: any) => {
+        acc[item.productId] = (acc[item.productId] || 0) + item.quantity;
+        return acc;
+      }, {});
+
       const updatedProducts = state.products.map((product: any) => {
-        const oldItem = rental.items.find((i: any) => i.productId === product.id);
-        const newItem = itemsWithDates.find((i: any) => i.productId === product.id);
-        
-        let stockChange = 0;
-        if (oldItem && newItem) {
-          stockChange = oldItem.quantity - newItem.quantity;
-        } else if (oldItem) {
-          stockChange = oldItem.quantity;
-        } else if (newItem) {
-          stockChange = -newItem.quantity;
-        }
+        const oldQty = oldItemsByProduct[product.id] || 0;
+        const newQty = newItemsByProduct[product.id] || 0;
+        const stockChange = oldQty - newQty;
 
         if (stockChange !== 0) {
           const obra = state.obras.find((o: any) => o.id === rental.workId);
@@ -650,7 +902,7 @@ export const useStore = create<StoreState>((set: any, get: any) => ({
 
       const updatedRentals = state.rentals.map((r: any) =>
         r.id === id
-          ? { ...r, items: itemsWithDates, totalPrice: calculatedTotal, resto }
+          ? { ...r, items: processedItems, totalPrice: calculatedTotal, resto }
           : r
       );
 
@@ -685,6 +937,84 @@ export const useStore = create<StoreState>((set: any, get: any) => ({
         return r;
       }),
     }));
+  },
+
+  recordRentalPayment: (id, amount, periodFrom, periodTo, notes) => {
+    set((state: any) => {
+      const rental = state.rentals.find((r: any) => r.id === id);
+      if (!rental) return state;
+
+      // Crear nuevo registro de pago
+      const newPayment: PaymentHistory = {
+        id: Date.now().toString(),
+        amount,
+        date: new Date().toISOString(),
+        periodFrom,
+        periodTo,
+        notes,
+      };
+
+      // Actualizar fecha de devolución a un mes después de la fecha de devolución actual
+      const currentReturnDate = new Date(rental.returnDate);
+      const nextMonth = new Date(currentReturnDate);
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      const newReturnDate = nextMonth.toISOString();
+
+      // Resetear fecha de adición de todos los items a la fecha hasta (periodTo)
+      // y consolidar items con el mismo nombre de producto
+      const newAddedDate = new Date(periodTo).toISOString();
+      const consolidatedItems: any[] = [];
+      const itemsByProduct: Record<string, any[]> = {};
+
+      // Agrupar items por productId
+      rental.items.forEach((item: any) => {
+        if (!itemsByProduct[item.productId]) {
+          itemsByProduct[item.productId] = [];
+        }
+        itemsByProduct[item.productId].push(item);
+      });
+
+      // Consolidar items del mismo producto
+      Object.keys(itemsByProduct).forEach((productId: string) => {
+        const items = itemsByProduct[productId];
+        const firstItem = items[0];
+        const totalQuantity = items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+        const unitPrice = firstItem.unitPrice;
+        const dailyPrice = firstItem.dailyPrice || firstItem.unitPrice;
+
+        consolidatedItems.push({
+          ...firstItem,
+          quantity: totalQuantity,
+          totalPrice: totalQuantity * unitPrice,
+          addedDate: newAddedDate,
+          dailyPrice: dailyPrice,
+        });
+      });
+
+      // Recalcular totalPrice basado en items consolidados
+      const newTotalPrice = consolidatedItems.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
+
+      // Actualizar total pagado
+      const newPagado = (rental.pagado || 0) + amount;
+      const newResto = Math.max(0, newTotalPrice - newPagado);
+
+      return {
+        rentals: state.rentals.map((r: any) => {
+          if (r.id === id) {
+            return {
+              ...r,
+              items: consolidatedItems,
+              totalPrice: newTotalPrice,
+              pagado: newPagado,
+              resto: newResto,
+              returnDate: newReturnDate,
+              paymentHistory: [...(r.paymentHistory || []), newPayment],
+            };
+          }
+          return r;
+        }),
+      };
+    });
   },
   
   updateRentalStatus: (id, status) => {

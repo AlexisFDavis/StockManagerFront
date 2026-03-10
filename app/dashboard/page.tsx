@@ -111,7 +111,10 @@ export default function DashboardPage() {
   }, [rentals]);
 
   const lowStockProducts = useMemo(
-    () => products.filter((p: any) => p.stockActual < 10 && p.stockActual > 0),
+    () => products.filter((p: any) => {
+      const threshold = p.lowStockThreshold ?? 20;
+      return p.stockActual < threshold && p.stockActual > 0;
+    }),
     [products]
   );
 

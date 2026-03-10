@@ -34,6 +34,7 @@ export default function InventarioPage() {
     stockTotal: 0,
     price: 0,
     notes: '',
+    lowStockThreshold: 20,
   });
   const [notesText, setNotesText] = useState('');
 
@@ -47,9 +48,10 @@ export default function InventarioPage() {
         product.description.toLowerCase().includes(searchText.toLowerCase());
       
       let matchesStock = true;
-      if (stockFilter === 'low') matchesStock = product.stockActual > 0 && product.stockActual < 10;
+      const threshold = product.lowStockThreshold ?? 20;
+      if (stockFilter === 'low') matchesStock = product.stockActual > 0 && product.stockActual < threshold;
       if (stockFilter === 'out') matchesStock = product.stockActual === 0;
-      if (stockFilter === 'available') matchesStock = product.stockActual >= 10;
+      if (stockFilter === 'available') matchesStock = product.stockActual >= threshold;
       
       return matchesSearch && matchesStock;
     });
@@ -57,7 +59,7 @@ export default function InventarioPage() {
 
   const openAddDialog = () => {
     setEditingProduct(null);
-    setFormData({ name: '', description: '', stockTotal: 0, price: 0, notes: '' });
+    setFormData({ name: '', description: '', stockTotal: 0, price: 0, notes: '', lowStockThreshold: 20 });
     setIsDialogOpen(true);
   };
 
@@ -69,6 +71,7 @@ export default function InventarioPage() {
       stockTotal: product.stockTotal,
       price: product.price,
       notes: product.notes || '',
+      lowStockThreshold: product.lowStockThreshold ?? 20,
     });
     setIsDialogOpen(true);
   };
@@ -128,7 +131,10 @@ export default function InventarioPage() {
   const totalProducts = products.length;
   const totalStock = products.reduce((sum: number, p: Product) => sum + p.stockTotal, 0);
   const stockActual = products.reduce((sum: number, p: Product) => sum + p.stockActual, 0);
-  const lowStockProducts = products.filter((p: Product) => p.stockActual < 10 && p.stockActual > 0).length;
+  const lowStockProducts = products.filter((p: Product) => {
+    const threshold = p.lowStockThreshold ?? 20;
+    return p.stockActual < threshold && p.stockActual > 0;
+  }).length;
   const outOfStockProducts = products.filter((p: Product) => p.stockActual === 0).length;
 
   return (
@@ -189,8 +195,8 @@ export default function InventarioPage() {
               className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all shadow-sm"
             >
               <option value="all">Todos</option>
-              <option value="available">Stock disponible (≥10)</option>
-              <option value="low">Stock bajo (&lt;10)</option>
+              <option value="available">Stock disponible</option>
+              <option value="low">Stock bajo</option>
               <option value="out">Sin stock</option>
             </select>
           </div>
@@ -208,7 +214,7 @@ export default function InventarioPage() {
               <div className="flex flex-col items-end gap-1">
                 <Badge
                   size="lg"
-                  color={product.stockActual === 0 ? 'red' : product.stockActual < 10 ? 'yellow' : 'green'}
+                  color={product.stockActual === 0 ? 'red' : product.stockActual < (product.lowStockThreshold ?? 20) ? 'yellow' : 'green'}
                 >
                   {product.stockActual} actual
                 </Badge>
@@ -328,6 +334,17 @@ export default function InventarioPage() {
               </div>
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Umbral de Stock Bajo</label>
+              <TextInput
+                type="number"
+                min="0"
+                value={formData.lowStockThreshold.toString()}
+                onChange={(e) => setFormData({ ...formData, lowStockThreshold: parseInt(e.target.value) || 20 })}
+                placeholder="20"
+                helperText="El producto se considerará con stock bajo cuando el stock actual esté por debajo de este valor"
+              />
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
               <Textarea
                 value={formData.notes}
@@ -404,7 +421,7 @@ export default function InventarioPage() {
                 <div>
                   <Text className="text-gray-500 text-sm mb-1">Stock Actual</Text>
                   <Badge
-                    color={selectedProduct.stockActual === 0 ? 'red' : selectedProduct.stockActual < 10 ? 'yellow' : 'green'}
+                    color={selectedProduct.stockActual === 0 ? 'red' : selectedProduct.stockActual < (selectedProduct.lowStockThreshold ?? 20) ? 'yellow' : 'green'}
                     size="lg"
                   >
                     {selectedProduct.stockActual}
@@ -466,6 +483,38 @@ export default function InventarioPage() {
                   </div>
                 );
               })()}
+
+              {/* Historial de Añadidos */}
+              <div className="border-t border-gray-200 pt-4">
+                <Title className="text-lg font-bold mb-3">Historial de Añadidos</Title>
+                {selectedProduct.addHistory && selectedProduct.addHistory.length > 0 ? (
+                  <div className="border border-gray-200 rounded-xl divide-y overflow-hidden">
+                    <div className="grid grid-cols-4 gap-2 p-3 bg-gray-100 text-xs font-semibold text-gray-600">
+                      <span className="col-span-1">Fecha</span>
+                      <span className="text-center">Cantidad</span>
+                      <span className="text-center col-span-2">Notas</span>
+                    </div>
+                    {selectedProduct.addHistory
+                      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map((entry: any) => {
+                        const isReduction = entry.notes?.includes('Reducido');
+                        return (
+                          <div key={entry.id} className="grid grid-cols-4 gap-2 p-3 items-center text-sm">
+                            <span className="col-span-1 text-gray-700">{format(new Date(entry.date), 'dd/MM/yyyy HH:mm')}</span>
+                            <span className={`text-center font-semibold ${isReduction ? 'text-red-600' : 'text-green-600'}`}>
+                              {isReduction ? '-' : '+'}{entry.quantity} unidades
+                            </span>
+                            <span className="text-center col-span-2 text-gray-500 text-xs">{entry.notes || '-'}</span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-gray-400 border border-gray-200 rounded-xl">
+                    <Text>No hay registros de añadidos</Text>
+                  </div>
+                )}
+              </div>
 
               {/* Notas */}
               <div className="border-t border-gray-200 pt-4">

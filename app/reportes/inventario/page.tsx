@@ -29,9 +29,10 @@ export default function ReportesInventarioPage() {
         p.name.toLowerCase().includes(searchText.toLowerCase()) ||
         p.description.toLowerCase().includes(searchText.toLowerCase());
       let matchesStock = true;
-      if (stockFilter === 'low') matchesStock = p.stockActual > 0 && p.stockActual < 10;
+      const threshold = p.lowStockThreshold ?? 20;
+      if (stockFilter === 'low') matchesStock = p.stockActual > 0 && p.stockActual < threshold;
       if (stockFilter === 'out') matchesStock = p.stockActual === 0;
-      if (stockFilter === 'available') matchesStock = p.stockActual >= 10;
+      if (stockFilter === 'available') matchesStock = p.stockActual >= threshold;
       return matchesSearch && matchesStock;
     });
   }, [products, searchText, stockFilter]);
@@ -40,7 +41,10 @@ export default function ReportesInventarioPage() {
   const totalStock = products.reduce((sum: number, p: Product) => sum + p.stockTotal, 0);
   const totalValue = products.reduce((sum: number, p: Product) => sum + (p.stockTotal * p.price), 0);
   const avgPrice = products.length > 0 ? products.reduce((sum: number, p: Product) => sum + p.price, 0) / products.length : 0;
-  const lowStockProducts = products.filter((p: Product) => p.stockActual > 0 && p.stockActual < 10).length;
+  const lowStockProducts = products.filter((p: Product) => {
+    const threshold = p.lowStockThreshold ?? 20;
+    return p.stockActual > 0 && p.stockActual < threshold;
+  }).length;
   const outOfStockProducts = products.filter((p: Product) => p.stockActual === 0).length;
 
   const stockByProduct = filteredProducts.map((p: Product) => ({
@@ -54,12 +58,18 @@ export default function ReportesInventarioPage() {
   }));
 
   const stockDistribution = useMemo(() => {
-    const available = products.filter((p: Product) => p.stockActual >= 10).length;
-    const low = products.filter((p: Product) => p.stockActual > 0 && p.stockActual < 10).length;
+    const available = products.filter((p: Product) => {
+      const threshold = p.lowStockThreshold ?? 20;
+      return p.stockActual >= threshold;
+    }).length;
+    const low = products.filter((p: Product) => {
+      const threshold = p.lowStockThreshold ?? 20;
+      return p.stockActual > 0 && p.stockActual < threshold;
+    }).length;
     const out = products.filter((p: Product) => p.stockActual === 0).length;
     return [
-      { name: 'Disponible (≥10)', value: available },
-      { name: 'Bajo (<10)', value: low },
+      { name: 'Disponible', value: available },
+      { name: 'Bajo', value: low },
       { name: 'Sin Stock', value: out },
     ];
   }, [products]);
@@ -110,8 +120,8 @@ export default function ReportesInventarioPage() {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
             >
               <option value="all">Todos</option>
-              <option value="available">Stock disponible (≥10)</option>
-              <option value="low">Stock bajo (&lt;10)</option>
+              <option value="available">Stock disponible</option>
+              <option value="low">Stock bajo</option>
               <option value="out">Sin stock</option>
             </select>
           </div>
@@ -217,7 +227,10 @@ export default function ReportesInventarioPage() {
       <Card className="shadow-sm">
         <Title className="text-lg font-bold mb-4">⚠️ Productos que Requieren Atención</Title>
         <div className="space-y-2">
-          {products.filter((p: Product) => p.stockActual < 10).length === 0 ? (
+          {products.filter((p: Product) => {
+            const threshold = p.lowStockThreshold ?? 20;
+            return p.stockActual < threshold;
+          }).length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Text className="text-3xl mb-2">✅</Text>
               <Text>Todos los productos tienen stock suficiente</Text>
@@ -235,6 +248,10 @@ export default function ReportesInventarioPage() {
                 </thead>
                 <tbody className="divide-y">
                   {products
+                    .filter((p: Product) => {
+                      const threshold = p.lowStockThreshold ?? 20;
+                      return p.stockActual < threshold;
+                    })
                     .map((p: Product) => (
                       <tr key={p.id} className="hover:bg-gray-50">
                         <td className="p-3 font-medium">{p.name}</td>
