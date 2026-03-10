@@ -4,17 +4,30 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/store';
 import { Card, Title, TextInput, Button, Text } from '@tremor/react';
+import { login } from '@/lib/api-client';
 
 export default function LoginPage() {
   const router = useRouter();
-  const login = useStore((state: any) => state.login);
+  const setUser = useStore((state: any) => state.setUser);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    login();
-    router.push('/dashboard');
+    setError('');
+    setLoading(true);
+    
+    try {
+      const user = await login(username, password);
+      setUser(user);
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Usuario o contraseña incorrectos');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -49,8 +62,18 @@ export default function LoginPage() {
               className="rounded-xl"
             />
           </div>
-          <Button type="submit" className="w-full rounded-xl shadow-md hover:shadow-lg transition-shadow" size="lg">
-            Iniciar Sesión
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+          <Button 
+            type="submit" 
+            className="w-full rounded-xl shadow-md hover:shadow-lg transition-shadow" 
+            size="lg"
+            disabled={loading}
+          >
+            {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
           </Button>
         </form>
       </Card>

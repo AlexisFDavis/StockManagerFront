@@ -10,6 +10,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  username  String   @unique
+  password  String   // Hash de la contraseña
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relaciones - acciones creadas por este usuario
+  createdProducts      Product[]      @relation("ProductCreatedBy")
+  updatedProducts      Product[]      @relation("ProductUpdatedBy")
+  createdClients       Client[]       @relation("ClientCreatedBy")
+  updatedClients       Client[]       @relation("ClientUpdatedBy")
+  createdObras         Obra[]         @relation("ObraCreatedBy")
+  updatedObras         Obra[]         @relation("ObraUpdatedBy")
+  createdRentals       Rental[]       @relation("RentalCreatedBy")
+  updatedRentals       Rental[]       @relation("RentalUpdatedBy")
+  createdStockMovements StockMovement[] @relation("StockMovementCreatedBy")
+  
+  @@index([username])
+}
+
 model Product {
   id              String   @id @default(uuid())
   name            String
@@ -22,10 +45,19 @@ model Product {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
+  // Auditoría
+  createdById     String?
+  updatedById     String?
+  createdBy       User?    @relation("ProductCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       User?    @relation("ProductUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  
   // Relaciones
   stockAddHistory StockAddHistory[]
   rentalItems     RentalItem[]
   stockMovements   StockMovement[]
+  
+  @@index([createdById])
+  @@index([updatedById])
 }
 
 model StockAddHistory {
@@ -52,9 +84,18 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
+  // Auditoría
+  createdById String?
+  updatedById String?
+  createdBy   User?  @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?  @relation("ClientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  
   // Relaciones
   obras     Obra[]
   rentals   Rental[]
+  
+  @@index([createdById])
+  @@index([updatedById])
 }
 
 model Obra {
@@ -70,6 +111,12 @@ model Obra {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
+  // Auditoría
+  createdById String?
+  updatedById String?
+  createdBy   User?   @relation("ObraCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?   @relation("ObraUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  
   // Relaciones
   client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   rentals     Rental[]
@@ -77,6 +124,8 @@ model Obra {
   
   @@index([clientId])
   @@index([status])
+  @@index([createdById])
+  @@index([updatedById])
 }
 
 model Rental {
@@ -92,6 +141,12 @@ model Rental {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   
+  // Auditoría
+  createdById   String?
+  updatedById   String?
+  createdBy     User?    @relation("RentalCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy     User?    @relation("RentalUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  
   // Relaciones
   obra           Obra     @relation(fields: [workId], references: [id], onDelete: Cascade)
   client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -102,6 +157,8 @@ model Rental {
   @@index([workId])
   @@index([clientId])
   @@index([status])
+  @@index([createdById])
+  @@index([updatedById])
 }
 
 model RentalItem {
@@ -152,6 +209,10 @@ model StockMovement {
   reason      String
   timestamp   DateTime @default(now())
   
+  // Auditoría
+  createdById String?
+  createdBy   User?   @relation("StockMovementCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  
   // Relaciones
   obra        Obra     @relation(fields: [obraId], references: [id], onDelete: Cascade)
   rental      Rental?  @relation(fields: [rentalId], references: [id], onDelete: SetNull)
@@ -163,5 +224,6 @@ model StockMovement {
   @@index([rentalId])
   @@index([productId])
   @@index([timestamp])
+  @@index([createdById])
 }
 

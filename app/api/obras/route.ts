@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth-server'
 
 // GET /api/obras
 export async function GET() {
   try {
+    await requireAuth()
+    
     const obras = await prisma.obra.findMany({
       include: {
-        client: true
+        client: true,
+        createdBy: {
+          select: { id: true, name: true, username: true }
+        },
+        updatedBy: {
+          select: { id: true, name: true, username: true }
+        }
       },
       orderBy: { createdAt: 'desc' }
     })
@@ -18,7 +27,13 @@ export async function GET() {
     }))
     
     return NextResponse.json(obrasWithClientName)
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'No autenticado') {
+      return NextResponse.json(
+        { error: 'No autenticado' },
+        { status: 401 }
+      )
+    }
     console.error('Error fetching obras:', error)
     return NextResponse.json(
       { error: 'Error al obtener obras' },
@@ -30,6 +45,7 @@ export async function GET() {
 // POST /api/obras
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireAuth()
     const body = await request.json()
     const { clientId, name, description, address } = body
     
@@ -39,10 +55,18 @@ export async function POST(request: NextRequest) {
         name,
         description: description || null,
         address: address || null,
-        status: 'active'
+        status: 'active',
+        createdById: user.id,
+        updatedById: user.id
       },
       include: {
-        client: true
+        client: true,
+        createdBy: {
+          select: { id: true, name: true, username: true }
+        },
+        updatedBy: {
+          select: { id: true, name: true, username: true }
+        }
       }
     })
     
@@ -50,7 +74,13 @@ export async function POST(request: NextRequest) {
       ...obra,
       clientName: obra.client.name
     }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'No autenticado') {
+      return NextResponse.json(
+        { error: 'No autenticado' },
+        { status: 401 }
+      )
+    }
     console.error('Error creating obra:', error)
     return NextResponse.json(
       { error: 'Error al crear obra' },

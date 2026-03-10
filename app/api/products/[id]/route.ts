@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth-server'
 
 // GET /api/products/[id] - Obtener un producto por ID
 export async function GET(
@@ -7,6 +8,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    await requireAuth()
+    
     const product = await prisma.product.findUnique({
       where: { id: params.id },
       include: {
@@ -24,7 +27,13 @@ export async function GET(
     }
     
     return NextResponse.json(product)
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'No autenticado') {
+      return NextResponse.json(
+        { error: 'No autenticado' },
+        { status: 401 }
+      )
+    }
     console.error('Error fetching product:', error)
     return NextResponse.json(
       { error: 'Error al obtener producto' },
@@ -39,6 +48,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const user = await requireAuth()
     const body = await request.json()
     const { name, description, stockTotal, price, notes, lowStockThreshold } = body
     
@@ -84,6 +94,7 @@ export async function PUT(
       price: price !== undefined ? price : existingProduct.price,
       notes: notes !== undefined ? notes : existingProduct.notes,
       lowStockThreshold: lowStockThreshold !== undefined ? lowStockThreshold : existingProduct.lowStockThreshold,
+      updatedById: user.id,
     }
     
     // Si hay cambio en stock, agregar al historial
@@ -108,7 +119,13 @@ export async function PUT(
     })
     
     return NextResponse.json(product)
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'No autenticado') {
+      return NextResponse.json(
+        { error: 'No autenticado' },
+        { status: 401 }
+      )
+    }
     console.error('Error updating product:', error)
     return NextResponse.json(
       { error: 'Error al actualizar producto' },
@@ -123,12 +140,20 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    await requireAuth()
+    
     await prisma.product.delete({
       where: { id: params.id }
     })
     
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'No autenticado') {
+      return NextResponse.json(
+        { error: 'No autenticado' },
+        { status: 401 }
+      )
+    }
     console.error('Error deleting product:', error)
     return NextResponse.json(
       { error: 'Error al eliminar producto' },

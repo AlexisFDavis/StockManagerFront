@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth-server'
 
 // GET /api/rentals
 export async function GET(request: NextRequest) {
   try {
+    await requireAuth()
+    
     const { searchParams } = new URL(request.url)
     const workId = searchParams.get('workId')
     const status = searchParams.get('status')
@@ -28,6 +31,12 @@ export async function GET(request: NextRequest) {
         },
         paymentHistory: {
           orderBy: { date: 'desc' }
+        },
+        createdBy: {
+          select: { id: true, name: true, username: true }
+        },
+        updatedBy: {
+          select: { id: true, name: true, username: true }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -45,7 +54,13 @@ export async function GET(request: NextRequest) {
     }))
     
     return NextResponse.json(rentalsWithNames)
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'No autenticado') {
+      return NextResponse.json(
+        { error: 'No autenticado' },
+        { status: 401 }
+      )
+    }
     console.error('Error fetching rentals:', error)
     return NextResponse.json(
       { error: 'Error al obtener alquileres' },
@@ -57,6 +72,7 @@ export async function GET(request: NextRequest) {
 // POST /api/rentals
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireAuth()
     const body = await request.json()
     const { workId, clientId, items, returnDate, notes } = body
     
@@ -75,6 +91,8 @@ export async function POST(request: NextRequest) {
         resto: totalPrice,
         status: 'sin presupuestar',
         notes: notes || null,
+        createdById: user.id,
+        updatedById: user.id,
         items: {
           create: items.map((item: any) => ({
             productId: item.productId,
@@ -122,7 +140,13 @@ export async function POST(request: NextRequest) {
         productName: item.product.name
       }))
     }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'No autenticado') {
+      return NextResponse.json(
+        { error: 'No autenticado' },
+        { status: 401 }
+      )
+    }
     console.error('Error creating rental:', error)
     return NextResponse.json(
       { error: 'Error al crear alquiler' },

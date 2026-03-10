@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/store/store';
 import {
   Card,
@@ -23,6 +23,13 @@ export default function InventarioPage() {
   const addProduct = useStore((state: any) => state.addProduct);
   const updateProduct = useStore((state: any) => state.updateProduct);
   const deleteProduct = useStore((state: any) => state.deleteProduct);
+  const loadProducts = useStore((state: any) => state.loadProducts);
+  const loadRentals = useStore((state: any) => state.loadRentals);
+
+  useEffect(() => {
+    loadProducts();
+    loadRentals();
+  }, [loadProducts, loadRentals]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useStore } from '@/store/store';
 import {
   Card,
@@ -20,6 +20,17 @@ export default function DashboardPage() {
   const rentals = useStore((state: any) => state.rentals);
   const clients = useStore((state: any) => state.clients);
   const obras = useStore((state: any) => state.obras);
+  const loadProducts = useStore((state: any) => state.loadProducts);
+  const loadRentals = useStore((state: any) => state.loadRentals);
+  const loadClients = useStore((state: any) => state.loadClients);
+  const loadObras = useStore((state: any) => state.loadObras);
+
+  useEffect(() => {
+    loadProducts();
+    loadRentals();
+    loadClients();
+    loadObras();
+  }, [loadProducts, loadRentals, loadClients, loadObras]);
 
   const [searchText, setSearchText] = useState('');
   const [dateFilter, setDateFilter] = useState('all');

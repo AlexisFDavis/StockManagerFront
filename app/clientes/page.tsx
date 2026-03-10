@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/store/store';
 import {
   Card,
@@ -23,6 +23,15 @@ export default function ClientesPage() {
   const addClient = useStore((state: any) => state.addClient);
   const updateClient = useStore((state: any) => state.updateClient);
   const deleteClient = useStore((state: any) => state.deleteClient);
+  const loadClients = useStore((state: any) => state.loadClients);
+  const loadObras = useStore((state: any) => state.loadObras);
+  const loadRentals = useStore((state: any) => state.loadRentals);
+
+  useEffect(() => {
+    loadClients();
+    loadObras();
+    loadRentals();
+  }, [loadClients, loadObras, loadRentals]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/store/store';
 import {
   Card,
@@ -27,6 +27,19 @@ export default function ObrasPage() {
   const deleteObra = useStore((state: any) => state.deleteObra);
   const products = useStore((state: any) => state.products);
   const updateProduct = useStore((state: any) => state.updateProduct);
+  const loadObras = useStore((state: any) => state.loadObras);
+  const loadClients = useStore((state: any) => state.loadClients);
+  const loadRentals = useStore((state: any) => state.loadRentals);
+  const loadProducts = useStore((state: any) => state.loadProducts);
+  const loadStockMovements = useStore((state: any) => state.loadStockMovements);
+
+  useEffect(() => {
+    loadObras();
+    loadClients();
+    loadRentals();
+    loadProducts();
+    loadStockMovements();
+  }, [loadObras, loadClients, loadRentals, loadProducts, loadStockMovements]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditPaymentOpen, setIsEditPaymentOpen] = useState(false);

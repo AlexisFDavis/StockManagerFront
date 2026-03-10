@@ -1,4 +1,4 @@
-                                      'use client';
+'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/store/store';
@@ -39,6 +39,17 @@ export default function AlquileresPage() {
   const updateRentalStatus = useStore((state: any) => state.updateRentalStatus);
   const updateRentalNotes = useStore((state: any) => state.updateRentalNotes);
   const transferStockBetweenObras = useStore((state: any) => state.transferStockBetweenObras);
+  const loadProducts = useStore((state: any) => state.loadProducts);
+  const loadClients = useStore((state: any) => state.loadClients);
+  const loadObras = useStore((state: any) => state.loadObras);
+  const loadRentals = useStore((state: any) => state.loadRentals);
+
+  useEffect(() => {
+    loadProducts();
+    loadClients();
+    loadObras();
+    loadRentals();
+  }, [loadProducts, loadClients, loadObras, loadRentals]);
 
   // Dialog states
   const [isDialogOpen, setIsDialogOpen] = useState(false);
