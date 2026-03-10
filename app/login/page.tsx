@@ -22,10 +22,10 @@ export default function LoginPage() {
     try {
       const user = await login(username, password);
       setUser(user);
-      router.push('/dashboard');
+      // Usar window.location para forzar recarga completa y asegurar que la cookie se establezca
+      window.location.href = '/dashboard';
     } catch (err: any) {
       setError(err.message || 'Usuario o contraseña incorrectos');
-    } finally {
       setLoading(false);
     }
   };

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyPassword } from '@/lib/auth'
-import { createSession } from '@/lib/auth-server'
+
+const SESSION_COOKIE_NAME = 'stock-manager-session'
+const SESSION_MAX_AGE = 60 * 60 * 24 * 7 // 7 días
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,15 +38,23 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Crear sesión
-    await createSession(user.id)
-    
-    // Retornar usuario (sin contraseña)
-    return NextResponse.json({
+    // Crear respuesta con usuario
+    const response = NextResponse.json({
       id: user.id,
       name: user.name,
       username: user.username
     })
+    
+    // Establecer cookie de sesión en la respuesta
+    response.cookies.set(SESSION_COOKIE_NAME, user.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: SESSION_MAX_AGE,
+      path: '/',
+    })
+    
+    return response
   } catch (error) {
     console.error('Error en login:', error)
     return NextResponse.json(
