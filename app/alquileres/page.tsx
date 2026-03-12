@@ -338,8 +338,15 @@ export default function AlquileresPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedWorkId || rentalItems.length === 0 || !returnDate) return;
+    const selectedObra = obras.find((o: any) => o.id === selectedWorkId);
+    if (!selectedObra) {
+      console.error('Obra no encontrada');
+      return;
+    }
+    
     addRental({
       workId: selectedWorkId,
+      clientId: selectedObra.clientId,
       items: rentalItems,
       returnDate,
       notes: newRentalNotes,
