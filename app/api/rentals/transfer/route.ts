@@ -9,32 +9,89 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { fromObraId, toObraId, items } = body
     
-    // Obtener alquileres activos de ambas obras
+    // Obtener alquiler activo de la obra origen (requerido)
     const fromRental = await prisma.rental.findFirst({
       where: {
         workId: fromObraId,
         status: 'iniciado'
       },
       include: {
-        items: true
+        items: true,
+        obra: {
+          include: {
+            client: true
+          }
+        },
+        client: true
       }
     })
     
-    const toRental = await prisma.rental.findFirst({
+    if (!fromRental) {
+      return NextResponse.json(
+        { error: 'La obra origen no tiene un alquiler activo' },
+        { status: 400 }
+      )
+    }
+    
+    // Obtener o crear alquiler activo de la obra destino
+    let toRental = await prisma.rental.findFirst({
       where: {
         workId: toObraId,
         status: 'iniciado'
       },
       include: {
-        items: true
+        items: true,
+        obra: {
+          include: {
+            client: true
+          }
+        },
+        client: true
       }
     })
     
-    if (!fromRental || !toRental) {
-      return NextResponse.json(
-        { error: 'Una o ambas obras no tienen alquileres activos' },
-        { status: 400 }
-      )
+    // Si no existe alquiler activo en la obra destino, crear uno nuevo
+    if (!toRental) {
+      // Obtener información de la obra destino
+      const toObra = await prisma.obra.findUnique({
+        where: { id: toObraId },
+        include: { client: true }
+      })
+      
+      if (!toObra) {
+        return NextResponse.json(
+          { error: 'La obra destino no existe' },
+          { status: 400 }
+        )
+      }
+      
+      // Crear nuevo alquiler para la obra destino
+      toRental = await prisma.rental.create({
+        data: {
+          workId: toObraId,
+          clientId: toObra.clientId,
+          returnDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días por defecto
+          totalPrice: 0,
+          pagado: 0,
+          resto: 0,
+          status: 'iniciado',
+          notes: `Alquiler creado automáticamente por transferencia desde obra: ${fromRental.obra.name}`,
+          createdById: user.id,
+          updatedById: user.id,
+          items: {
+            create: []
+          }
+        },
+        include: {
+          items: true,
+          obra: {
+            include: {
+              client: true
+            }
+          },
+          client: true
+        }
+      })
     }
     
     // Validar que hay suficiente stock en el alquiler origen
