@@ -192,20 +192,19 @@ export async function DELETE(
       )
     }
     
-    // Si está activo, devolver stock
-    if (rental.status === 'iniciado') {
-      for (const item of rental.items) {
-        await prisma.product.update({
-          where: { id: item.productId },
-          data: {
-            stockActual: {
-              increment: item.quantity
-            }
+    // Al crear un alquiler siempre se descuenta stock; al eliminar hay que
+    // devolver las cantidades actuales de cada ítem (p. ej. tras devoluciones parciales).
+    for (const item of rental.items) {
+      await prisma.product.update({
+        where: { id: item.productId },
+        data: {
+          stockActual: {
+            increment: item.quantity
           }
-        })
-      }
+        }
+      })
     }
-    
+
     await prisma.rental.delete({
       where: { id: params.id }
     })

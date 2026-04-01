@@ -105,19 +105,22 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Actualizar items del alquiler origen (reducir cantidad)
-    for (const transferItem of items) {
-      const fromItem = fromRental.items.find((item: any) => item.productId === transferItem.productId)
-      if (fromItem) {
+    // Usar transacción para asegurar que todas las operaciones se completen correctamente
+    await prisma.$transaction(async (tx) => {
+      // Actualizar items del alquiler origen (reducir cantidad)
+      for (const transferItem of items) {
+        const fromItem = fromRental.items.find((item: any) => item.productId === transferItem.productId)
+        if (!fromItem) continue
+        
         const newQuantity = fromItem.quantity - transferItem.quantity
         if (newQuantity <= 0) {
           // Eliminar item si la cantidad llega a 0
-          await prisma.rentalItem.delete({
+          await tx.rentalItem.delete({
             where: { id: fromItem.id }
           })
         } else {
           // Actualizar cantidad
-          await prisma.rentalItem.update({
+          await tx.rentalItem.update({
             where: { id: fromItem.id },
             data: {
               quantity: newQuantity,
@@ -126,41 +129,45 @@ export async function POST(request: NextRequest) {
           })
         }
       }
-    }
-    
-    // Actualizar items del alquiler destino (agregar cantidad)
-    for (const transferItem of items) {
-      const toItem = toRental.items.find((item: any) => item.productId === transferItem.productId)
-      const product = await prisma.product.findUnique({
-        where: { id: transferItem.productId }
+      
+      // Recargar items del alquiler destino después de crear el alquiler (si fue creado)
+      const refreshedToRental = await tx.rental.findUnique({
+        where: { id: toRental.id },
+        include: { items: true }
       })
       
-      if (!product) continue
-      
-      if (toItem) {
-        // Actualizar cantidad existente
-        await prisma.rentalItem.update({
-          where: { id: toItem.id },
-          data: {
-            quantity: toItem.quantity + transferItem.quantity,
-            totalPrice: (toItem.quantity + transferItem.quantity) * toItem.unitPrice
-          }
-        })
-      } else {
-        // Crear nuevo item
-        await prisma.rentalItem.create({
-          data: {
-            rentalId: toRental.id,
-            productId: transferItem.productId,
-            quantity: transferItem.quantity,
-            unitPrice: product.price,
-            dailyPrice: product.price,
-            totalPrice: transferItem.quantity * product.price,
-            addedDate: new Date()
-          }
-        })
+      // Actualizar items del alquiler destino (agregar cantidad)
+      for (const transferItem of items) {
+        const fromItem = fromRental.items.find((item: any) => item.productId === transferItem.productId)
+        if (!fromItem) continue
+        
+        const toItem = refreshedToRental?.items.find((item: any) => item.productId === transferItem.productId)
+        
+        if (toItem) {
+          // Actualizar cantidad existente - mantener el precio existente del item destino
+          await tx.rentalItem.update({
+            where: { id: toItem.id },
+            data: {
+              quantity: toItem.quantity + transferItem.quantity,
+              totalPrice: (toItem.quantity + transferItem.quantity) * toItem.unitPrice
+            }
+          })
+        } else {
+          // Crear nuevo item usando el precio del item origen para mantener consistencia
+          await tx.rentalItem.create({
+            data: {
+              rentalId: toRental.id,
+              productId: transferItem.productId,
+              quantity: transferItem.quantity,
+              unitPrice: fromItem.unitPrice,
+              dailyPrice: fromItem.dailyPrice || fromItem.unitPrice,
+              totalPrice: transferItem.quantity * fromItem.unitPrice,
+              addedDate: new Date()
+            }
+          })
+        }
       }
-    }
+    })
     
     // Crear movimientos de stock
     const obras = await prisma.obra.findMany({
@@ -230,7 +237,42 @@ export async function POST(request: NextRequest) {
       }
     })
     
-    return NextResponse.json({ message: 'Transferencia completada' })
+    // Obtener los rentals actualizados para la respuesta
+    const finalFromRental = await prisma.rental.findUnique({
+      where: { id: fromRental.id },
+      include: {
+        items: {
+          include: {
+            product: true
+          }
+        }
+      }
+    })
+    
+    const finalToRental = await prisma.rental.findUnique({
+      where: { id: toRental.id },
+      include: {
+        items: {
+          include: {
+            product: true
+          }
+        }
+      }
+    })
+    
+    return NextResponse.json({ 
+      message: 'Transferencia completada',
+      fromRental: {
+        id: finalFromRental?.id,
+        itemsCount: finalFromRental?.items.length || 0,
+        totalPrice: finalFromRental?.totalPrice || 0
+      },
+      toRental: {
+        id: finalToRental?.id,
+        itemsCount: finalToRental?.items.length || 0,
+        totalPrice: finalToRental?.totalPrice || 0
+      }
+    })
   } catch (error: any) {
     if (error.message === 'No autenticado') {
       return NextResponse.json(

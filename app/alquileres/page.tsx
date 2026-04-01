@@ -22,6 +22,21 @@ import { RentalItem } from '@/types';
 import { format, differenceInDays } from 'date-fns';
 import { generarRemito, generarRecibo, descargarPDF, RemitoData, ReciboData } from '@/app/utils/pdfGenerator';
 
+/** Quitar flechas nativas de input[type=number] en navegadores WebKit. */
+const hideNumberSpinners =
+  '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
+
+/** Inputs numéricos sin flechas del navegador; edición libre con validación al perder foco / enviar. */
+const freeIntInputCls =
+  `min-w-[4.5rem] w-24 text-sm text-center border border-gray-300 rounded px-2 py-1 focus:border-blue-500 focus:outline-none ${hideNumberSpinners}`;
+const freeDecimalInputCls =
+  `min-w-[5rem] w-28 text-sm text-center border border-gray-300 rounded px-2 py-1 focus:border-blue-500 focus:outline-none ${hideNumberSpinners}`;
+
+/** Solo dígitos, permite vacío */
+const isLooseIntString = (s: string) => /^\d*$/.test(s);
+/** Decimal parcial para edición cómoda */
+const isLooseDecimalString = (s: string) => /^-?\d*[.,]?\d*$/.test(s);
+
 export default function AlquileresPage() {
   const products = useStore((state: any) => state.products);
   const clients = useStore((state: any) => state.clients);
@@ -39,6 +54,7 @@ export default function AlquileresPage() {
   const updateRentalStatus = useStore((state: any) => state.updateRentalStatus);
   const updateRentalNotes = useStore((state: any) => state.updateRentalNotes);
   const transferStockBetweenObras = useStore((state: any) => state.transferStockBetweenObras);
+  const deleteRental = useStore((state: any) => state.deleteRental);
   const loadProducts = useStore((state: any) => state.loadProducts);
   const loadClients = useStore((state: any) => state.loadClients);
   const loadObras = useStore((state: any) => state.loadObras);
@@ -76,7 +92,20 @@ export default function AlquileresPage() {
   const [editingRentalItems, setEditingRentalItems] = useState<RentalItem[]>([]);
   const [returnDate, setReturnDate] = useState('');
   const [pagado, setPagado] = useState(0);
+  const [pagadoInputStr, setPagadoInputStr] = useState('');
   const [newRentalNotes, setNewRentalNotes] = useState('');
+  /** Borradores para mostrar '' mientras se edita (nuevo alquiler, por productId) */
+  const [newRentalQtyDraft, setNewRentalQtyDraft] = useState<Record<string, string>>({});
+  const [newRentalDailyDraft, setNewRentalDailyDraft] = useState<Record<string, string>>({});
+  const [editingQtyStrs, setEditingQtyStrs] = useState<string[]>([]);
+  const [editingDailyStrs, setEditingDailyStrs] = useState<string[]>([]);
+  const [partialReturnQtyStrs, setPartialReturnQtyStrs] = useState<string[]>([]);
+  const [transferQtyDraft, setTransferQtyDraft] = useState<Record<string, string>>({});
+  const [billingItemDiscountStr, setBillingItemDiscountStr] = useState<Record<string, string>>({});
+  const [billingTotalDiscountStr, setBillingTotalDiscountStr] = useState('');
+  const [rentalToDelete, setRentalToDelete] = useState<any>(null);
+  const [deletePhraseInput, setDeletePhraseInput] = useState('');
+  const [deleteRentalLoading, setDeleteRentalLoading] = useState(false);
 
   // Details modal
   const [detailsNotes, setDetailsNotes] = useState('');
@@ -190,6 +219,8 @@ export default function AlquileresPage() {
     setReturnDate('');
     setPagado(0);
     setNewRentalNotes('');
+    setNewRentalQtyDraft({});
+    setNewRentalDailyDraft({});
     setIsDialogOpen(true);
   };
 
@@ -211,24 +242,37 @@ export default function AlquileresPage() {
     setDiscountType('none');
     setItemDiscounts({});
     setTotalDiscount({ type: 'percent', value: 0 });
+    setBillingItemDiscountStr({});
+    setBillingTotalDiscountStr('');
     setIsBillingOpen(true);
   };
 
   const openEditItemsDialog = (rental: any) => {
     setSelectedRental(rental);
-    setEditingRentalItems(rental.items.map((item: any) => ({ ...item })));
+    const items = rental.items.map((item: any) => ({ ...item }));
+    setEditingRentalItems(items);
+    setEditingQtyStrs(items.map((i: any) => (i.quantity === 0 ? '' : String(i.quantity))));
+    setEditingDailyStrs(
+      items.map((i: any) => {
+        const d = i.dailyPrice ?? i.unitPrice;
+        return d === 0 ? '' : String(d);
+      })
+    );
     setIsEditItemsOpen(true);
   };
 
   const openEditPaymentDialog = (rental: any) => {
     setSelectedRental(rental);
-    setPagado(rental.pagado || 0);
+    const p = rental.pagado || 0;
+    setPagado(p);
+    setPagadoInputStr(p === 0 ? '' : String(p));
     setIsEditPaymentOpen(true);
   };
 
   const openPartialReturn = (rental: any) => {
     setSelectedRental(rental);
     setPartialReturnItems(rental.items.map((item: any) => ({ productId: item.productId, quantity: 0 })));
+    setPartialReturnQtyStrs(rental.items.map(() => ''));
     setIsPartialReturnOpen(true);
   };
 
@@ -294,29 +338,69 @@ export default function AlquileresPage() {
         }]);
       }
     }
+    setNewRentalQtyDraft((d) => {
+      const next = { ...d };
+      delete next[productId];
+      return next;
+    });
+    setNewRentalDailyDraft((d) => {
+      const next = { ...d };
+      delete next[productId];
+      return next;
+    });
   };
 
   const removeItemFromRental = (productId: string) => {
     setRentalItems(rentalItems.filter((item) => item.productId !== productId));
+    setNewRentalQtyDraft((d) => {
+      const next = { ...d };
+      delete next[productId];
+      return next;
+    });
+    setNewRentalDailyDraft((d) => {
+      const next = { ...d };
+      delete next[productId];
+      return next;
+    });
   };
 
   const updateItemQuantity = (productId: string, quantity: number) => {
-    const product = products.find((p: any) => p.id === productId);
-    if (!product || quantity < 1 || quantity > product.stockActual) return;
+    if (!Number.isFinite(quantity)) return;
+    const q = Math.floor(quantity);
+    if (q < 0) return;
     setRentalItems(
       rentalItems.map((item) =>
         item.productId === productId
-          ? { ...item, quantity, totalPrice: quantity * item.unitPrice }
+          ? { ...item, quantity: q, totalPrice: q * item.unitPrice }
           : item
       )
     );
   };
 
+  const clampNewRentalItemQuantity = (productId: string) => {
+    const product = products.find((p: any) => p.id === productId);
+    const item = rentalItems.find((i) => i.productId === productId);
+    if (!product || !item) return;
+    const maxQty = Math.max(0, product.stockActual);
+    const q = Math.max(1, Math.min(maxQty, item.quantity));
+    if (q !== item.quantity) {
+      setRentalItems(
+        rentalItems.map((it) =>
+          it.productId === productId
+            ? { ...it, quantity: q, totalPrice: q * it.unitPrice }
+            : it
+        )
+      );
+    }
+  };
+
   const updateItemDailyPrice = (productId: string, dailyPrice: number) => {
+    if (!Number.isFinite(dailyPrice)) return;
+    const d = Math.max(0, dailyPrice);
     setRentalItems(
       rentalItems.map((item) =>
         item.productId === productId
-          ? { ...item, dailyPrice: Math.max(0, dailyPrice) }
+          ? { ...item, dailyPrice: d }
           : item
       )
     );
@@ -338,6 +422,27 @@ export default function AlquileresPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedWorkId || rentalItems.length === 0 || !returnDate) return;
+
+    for (const item of rentalItems) {
+      if (item.quantity < 1) {
+        alert(`La cantidad de "${item.productName}" debe ser al menos 1.`);
+        return;
+      }
+      const effectiveDaily = item.dailyPrice ?? item.unitPrice;
+      if (effectiveDaily <= 0) {
+        alert(`El precio por día de "${item.productName}" debe ser mayor que 0.`);
+        return;
+      }
+      const p = products.find((x: any) => x.id === item.productId);
+      if (!p || item.quantity > p.stockActual) {
+        alert(
+          `Revisa las cantidades: "${item.productName}" no puede superar el stock disponible (${p?.stockActual ?? 0} uds.).`
+        );
+        return;
+      }
+    }
+    
+    // Obtener el clientId de la obra seleccionada
     const selectedObra = obras.find((o: any) => o.id === selectedWorkId);
     if (!selectedObra) {
       console.error('Obra no encontrada');
@@ -356,13 +461,38 @@ export default function AlquileresPage() {
 
   const handleUpdateItems = () => {
     if (!selectedRental) return;
+    for (let idx = 0; idx < editingRentalItems.length; idx++) {
+      const item = editingRentalItems[idx];
+      if (item.quantity < 1) {
+        alert(`La cantidad de "${item.productName}" debe ser al menos 1.`);
+        return;
+      }
+      const effectiveDaily = item.dailyPrice ?? item.unitPrice;
+      if (effectiveDaily <= 0) {
+        alert(`El precio por día de "${item.productName}" debe ser mayor que 0.`);
+        return;
+      }
+      const product = products.find((p: any) => p.id === item.productId);
+      if (!product) continue;
+      const totalOthers = editingRentalItems
+        .filter((i, iidx) => i.productId === item.productId && iidx !== idx)
+        .reduce((sum, i) => sum + i.quantity, 0);
+      if (item.quantity + totalOthers > product.stockActual) {
+        alert(`La cantidad de "${item.productName}" supera el stock disponible para ese producto.`);
+        return;
+      }
+    }
     updateRentalItems(selectedRental.id, editingRentalItems);
     setIsEditItemsOpen(false);
   };
 
   const handleUpdatePayment = () => {
     if (!selectedRental) return;
-    updateRentalPayment(selectedRental.id, pagado);
+    const cap = selectedRental.totalPrice || 0;
+    const raw = String(pagadoInputStr).trim().replace(',', '.');
+    const n = parseFloat(raw);
+    const pagadoVal = raw === '' || Number.isNaN(n) ? 0 : Math.max(0, Math.min(cap, n));
+    updateRentalPayment(selectedRental.id, pagadoVal);
     setIsEditPaymentOpen(false);
   };
 
@@ -390,41 +520,24 @@ export default function AlquileresPage() {
         totalPrice: product.price,
         addedDate: new Date(todayStr).toISOString(), // Fecha actual como fecha de adición
       }]);
+      setEditingQtyStrs((s) => [...s, '1']);
+      setEditingDailyStrs((s) => [...s, String(product.price)]);
     }
   };
 
   const removeItemFromEditingRental = (itemIndex: number) => {
     setEditingRentalItems(editingRentalItems.filter((_, index) => index !== itemIndex));
-  };
-
-  const updateEditingItemQuantity = (itemIndex: number, quantity: number) => {
-    const item = editingRentalItems[itemIndex];
-    if (!item || quantity < 1) return;
-    
-    const product = products.find((p: any) => p.id === item.productId);
-    if (!product) return;
-    
-    // Verificar stock total disponible (sumando todos los items del mismo producto excepto el actual)
-    const totalQuantityInRental = editingRentalItems
-      .filter((i, idx) => i.productId === item.productId && idx !== itemIndex)
-      .reduce((sum, i) => sum + i.quantity, 0);
-    
-    if (quantity + totalQuantityInRental > product.stockActual) return;
-    
-    setEditingRentalItems(
-      editingRentalItems.map((i, idx) =>
-        idx === itemIndex
-          ? { ...i, quantity, totalPrice: quantity * i.unitPrice }
-          : i
-      )
-    );
+    setEditingQtyStrs((s) => s.filter((_, i) => i !== itemIndex));
+    setEditingDailyStrs((s) => s.filter((_, i) => i !== itemIndex));
   };
 
   const updateEditingItemDailyPrice = (itemIndex: number, dailyPrice: number) => {
+    if (!Number.isFinite(dailyPrice)) return;
+    const d = Math.max(0, dailyPrice);
     setEditingRentalItems(
       editingRentalItems.map((item, idx) =>
         idx === itemIndex
-          ? { ...item, dailyPrice: Math.max(0, dailyPrice) }
+          ? { ...item, dailyPrice: d }
           : item
       )
     );
@@ -442,6 +555,37 @@ export default function AlquileresPage() {
 
   const handleFullReturn = (rentalId: string) => {
     if (confirm('¿Confirmar devolución completa?')) returnRental(rentalId);
+  };
+
+  const openDeleteRentalModal = (rental: any) => {
+    setRentalToDelete(rental);
+    setDeletePhraseInput('');
+  };
+
+  const closeDeleteRentalModal = () => {
+    if (deleteRentalLoading) return;
+    setRentalToDelete(null);
+    setDeletePhraseInput('');
+  };
+
+  const executeDeleteRental = async () => {
+    if (!rentalToDelete) return;
+    if (deletePhraseInput.trim() !== 'ELIMINAR') {
+      alert('Escriba exactamente ELIMINAR (mayúsculas) para confirmar.');
+      return;
+    }
+    setDeleteRentalLoading(true);
+    try {
+      await deleteRental(rentalToDelete.id);
+      setRentalToDelete(null);
+      setDeletePhraseInput('');
+      setIsDetailsOpen(false);
+      setSelectedRental(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo eliminar el alquiler');
+    } finally {
+      setDeleteRentalLoading(false);
+    }
   };
 
   const checkStockForReactivation = (rental: any) => {
@@ -675,7 +819,10 @@ export default function AlquileresPage() {
         <div></div>
         <div className="flex gap-3">
           <button
-            onClick={() => setIsTransferOpen(true)}
+            onClick={() => {
+              setTransferQtyDraft({});
+              setIsTransferOpen(true);
+            }}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg"
           >
             <span className="text-lg">🔄</span>
@@ -937,6 +1084,14 @@ export default function AlquileresPage() {
                             >
                               💰 Recibo
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => openDeleteRentalModal(rental)}
+                              className="px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-xl transition-all"
+                              title="Eliminar alquiler"
+                            >
+                              🗑 Eliminar
+                            </button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1081,6 +1236,13 @@ export default function AlquileresPage() {
                           💰 Recibo
                         </button>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => openDeleteRentalModal(rental)}
+                        className="w-full px-3 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-xl transition-all border border-red-200"
+                      >
+                        🗑 Eliminar alquiler
+                      </button>
                     </div>
                   </div>
                 );
@@ -1097,7 +1259,7 @@ export default function AlquileresPage() {
           style={{ minHeight: '100vh', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflowY: 'auto' }}
           onClick={(e) => { if (e.target === e.currentTarget) setIsDialogOpen(false); }}
         >
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 my-auto max-h-[90vh] overflow-y-auto">
+          <div className="bg-white w-full max-w-[56rem] rounded-2xl shadow-2xl p-6 my-auto max-h-[90vh] overflow-y-auto">
             <Title className="text-xl font-bold mb-6">Nuevo Alquiler</Title>
             <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -1147,20 +1309,85 @@ export default function AlquileresPage() {
                           <div className="flex items-center gap-3 flex-wrap">
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">Cant:</span>
-                            <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity - 1)} disabled={item.quantity <= 1} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">-</button>
                             <input
-                                type="number" min="1" max={product?.stockActual || 0} value={item.quantity}
-                                onChange={(e) => updateItemQuantity(item.productId, Math.max(1, Math.min(product?.stockActual || 0, parseInt(e.target.value) || 1)))}
-                                className="w-14 text-sm text-center border border-gray-300 rounded px-1 py-0.5 focus:border-blue-500 focus:outline-none"
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="off"
+                                value={
+                                  item.productId in newRentalQtyDraft
+                                    ? newRentalQtyDraft[item.productId]
+                                    : item.quantity === 0
+                                      ? ''
+                                      : String(item.quantity)
+                                }
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (!isLooseIntString(v)) return;
+                                  setNewRentalQtyDraft((d) => ({ ...d, [item.productId]: v }));
+                                }}
+                                onBlur={() => {
+                                  const pid = item.productId;
+                                  const raw = (
+                                    pid in newRentalQtyDraft
+                                      ? newRentalQtyDraft[pid]
+                                      : item.quantity === 0
+                                        ? ''
+                                        : String(item.quantity)
+                                  ).trim();
+                                  let q = parseInt(raw, 10);
+                                  if (raw === '' || Number.isNaN(q)) q = 0;
+                                  updateItemQuantity(pid, q);
+                                  clampNewRentalItemQuantity(pid);
+                                  setNewRentalQtyDraft((d) => {
+                                    const next = { ...d };
+                                    delete next[pid];
+                                    return next;
+                                  });
+                                }}
+                                title={`Stock disponible: ${product?.stockActual ?? 0}`}
+                                className={freeIntInputCls}
                             />
-                            <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity + 1)} disabled={item.quantity >= (product?.stockActual || 0)} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">+</button>
                           </div>
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">$/día:</span>
                               <input
-                                type="number" min="0" value={item.dailyPrice}
-                                onChange={(e) => updateItemDailyPrice(item.productId, parseFloat(e.target.value) || 0)}
-                                className="w-20 text-sm text-center border border-gray-300 rounded px-1 py-0.5 focus:border-blue-500 focus:outline-none"
+                                type="text"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                value={
+                                  item.productId in newRentalDailyDraft
+                                    ? newRentalDailyDraft[item.productId]
+                                    : item.dailyPrice === 0
+                                      ? ''
+                                      : String(item.dailyPrice)
+                                }
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (!isLooseDecimalString(v)) return;
+                                  setNewRentalDailyDraft((d) => ({ ...d, [item.productId]: v }));
+                                }}
+                                onBlur={() => {
+                                  const pid = item.productId;
+                                  const raw = (
+                                    pid in newRentalDailyDraft
+                                      ? newRentalDailyDraft[pid]
+                                      : item.dailyPrice === 0
+                                        ? ''
+                                        : String(item.dailyPrice)
+                                  )
+                                    .trim()
+                                    .replace(',', '.');
+                                  const n = parseFloat(raw);
+                                  const num = raw === '' || Number.isNaN(n) ? 0 : n;
+                                  updateItemDailyPrice(pid, num);
+                                  setNewRentalDailyDraft((d) => {
+                                    const next = { ...d };
+                                    if (num === 0) next[pid] = '';
+                                    else delete next[pid];
+                                    return next;
+                                  });
+                                }}
+                                className={freeDecimalInputCls}
                               />
                         </div>
                             <div className="flex items-center gap-1">
@@ -1398,8 +1625,15 @@ export default function AlquileresPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end pt-4 border-t">
-                <button onClick={() => setIsDetailsOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => selectedRental && openDeleteRentalModal(selectedRental)}
+                  className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-xl transition-all border border-red-200"
+                >
+                  Eliminar alquiler
+                </button>
+                <button onClick={() => setIsDetailsOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all sm:ml-auto">
                   Cerrar
                 </button>
               </div>
@@ -1496,19 +1730,31 @@ export default function AlquileresPage() {
                           setDiscountType('none');
                           setItemDiscounts({});
                           setTotalDiscount({ type: 'percent', value: 0 });
+                          setBillingItemDiscountStr({});
+                          setBillingTotalDiscountStr('');
                         }}
                         className={`px-3 py-2 text-sm font-medium rounded-xl transition-all ${discountType === 'none' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                       >
                         Sin descuento
                       </button>
                       <button
-                        onClick={() => setDiscountType('item')}
+                        onClick={() => {
+                          setDiscountType('item');
+                          setBillingTotalDiscountStr('');
+                          setBillingItemDiscountStr({});
+                        }}
                         className={`px-3 py-2 text-sm font-medium rounded-xl transition-all ${discountType === 'item' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                       >
                         Por ítem
                       </button>
                       <button
-                        onClick={() => setDiscountType('total')}
+                        onClick={() => {
+                          setDiscountType('total');
+                          setBillingItemDiscountStr({});
+                          setBillingTotalDiscountStr(
+                            totalDiscount.value ? String(totalDiscount.value) : ''
+                          );
+                        }}
                         className={`px-3 py-2 text-sm font-medium rounded-xl transition-all ${discountType === 'total' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                       >
                         Sobre el total
@@ -1550,6 +1796,11 @@ export default function AlquileresPage() {
                               <select
                                 value={itemDiscount.type}
                                 onChange={(e) => {
+                                  setBillingItemDiscountStr((d) => {
+                                    const next = { ...d };
+                                    delete next[item.productId];
+                                    return next;
+                                  });
                                   setItemDiscounts({
                                     ...itemDiscounts,
                                     [item.productId]: { ...itemDiscount, type: e.target.value as 'percent' | 'amount' }
@@ -1561,19 +1812,54 @@ export default function AlquileresPage() {
                                 <option value="amount">$</option>
                               </select>
                               <input
-                                type="number"
-                                min="0"
-                                max={itemDiscount.type === 'percent' ? 100 : item.subtotal}
-                                step={itemDiscount.type === 'percent' ? 1 : 0.01}
-                                value={itemDiscount.value || 0}
+                                type="text"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                value={
+                                  item.productId in billingItemDiscountStr
+                                    ? billingItemDiscountStr[item.productId]
+                                    : itemDiscount.value
+                                      ? String(itemDiscount.value)
+                                      : ''
+                                }
                                 onChange={(e) => {
-                                  const value = parseFloat(e.target.value) || 0;
+                                  const v = e.target.value;
+                                  if (!isLooseDecimalString(v)) return;
+                                  setBillingItemDiscountStr((d) => ({
+                                    ...d,
+                                    [item.productId]: v,
+                                  }));
+                                }}
+                                onBlur={() => {
+                                  const pid = item.productId;
+                                  const disc = itemDiscount;
+                                  const fallback = disc.value !== 0 ? String(disc.value) : '';
+                                  const raw = (
+                                    pid in billingItemDiscountStr
+                                      ? billingItemDiscountStr[pid]
+                                      : fallback
+                                  )
+                                    .trim()
+                                    .replace(',', '.');
+                                  let num = parseFloat(raw);
+                                  if (raw === '' || Number.isNaN(num)) num = 0;
+                                  if (disc.type === 'percent') {
+                                    num = Math.min(100, Math.max(0, num));
+                                  } else {
+                                    num = Math.min(item.subtotal, Math.max(0, num));
+                                  }
                                   setItemDiscounts({
                                     ...itemDiscounts,
-                                    [item.productId]: { ...itemDiscount, value }
+                                    [pid]: { ...disc, value: num },
+                                  });
+                                  setBillingItemDiscountStr((d) => {
+                                    const next = { ...d };
+                                    if (num === 0) next[pid] = '';
+                                    else delete next[pid];
+                                    return next;
                                   });
                                 }}
-                                className="w-20 text-xs rounded border border-gray-300 px-2 py-1"
+                                className={`w-24 text-xs rounded border border-gray-300 px-2 py-1 ${hideNumberSpinners}`}
                                 placeholder="0"
                               />
                             </div>
@@ -1602,6 +1888,7 @@ export default function AlquileresPage() {
                         <select
                           value={totalDiscount.type}
                           onChange={(e) => {
+                            setBillingTotalDiscountStr('');
                             setTotalDiscount({ ...totalDiscount, type: e.target.value as 'percent' | 'amount' });
                           }}
                           className="rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
@@ -1610,16 +1897,29 @@ export default function AlquileresPage() {
                           <option value="amount">Monto fijo ($)</option>
                         </select>
                         <input
-                          type="number"
-                          min="0"
-                          max={totalDiscount.type === 'percent' ? 100 : billingDetails.subtotal}
-                          step={totalDiscount.type === 'percent' ? 1 : 0.01}
-                          value={totalDiscount.value || 0}
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
+                          value={billingTotalDiscountStr}
                           onChange={(e) => {
-                            const value = parseFloat(e.target.value) || 0;
-                            setTotalDiscount({ ...totalDiscount, value });
+                            const v = e.target.value;
+                            if (!isLooseDecimalString(v)) return;
+                            setBillingTotalDiscountStr(v);
                           }}
-                          className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                          onBlur={() => {
+                            const subtotal = billingDetails.subtotal;
+                            const raw = billingTotalDiscountStr.trim().replace(',', '.');
+                            let num = parseFloat(raw);
+                            if (raw === '' || Number.isNaN(num)) num = 0;
+                            if (totalDiscount.type === 'percent') {
+                              num = Math.min(100, Math.max(0, num));
+                            } else {
+                              num = Math.min(subtotal, Math.max(0, num));
+                            }
+                            setTotalDiscount({ ...totalDiscount, value: num });
+                            setBillingTotalDiscountStr(num === 0 ? '' : String(num));
+                          }}
+                          className={`flex-1 rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none ${hideNumberSpinners}`}
                           placeholder={totalDiscount.type === 'percent' ? '0%' : '$0'}
                         />
                       </div>
@@ -1716,13 +2016,34 @@ export default function AlquileresPage() {
                       <Text className="text-xs text-gray-500">Alquilado: {item.quantity}</Text>
                     </div>
                     <input
-                        type="number" min="0" max={item.quantity}
-                      value={partialReturnItems[idx]?.quantity || 0}
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                      value={partialReturnQtyStrs[idx] ?? ''}
                       onChange={(e) => {
-                        const val = Math.min(item.quantity, Math.max(0, parseInt(e.target.value) || 0));
-                        setPartialReturnItems(prev => prev.map((p, i) => i === idx ? { ...p, quantity: val } : p));
+                        const v = e.target.value;
+                        if (!isLooseIntString(v)) return;
+                        setPartialReturnQtyStrs((prev) => {
+                          const x = [...prev];
+                          x[idx] = v;
+                          return x;
+                        });
                       }}
-                      className="w-16 rounded border border-gray-300 px-2 py-1 text-center text-sm"
+                      onBlur={() => {
+                        const raw = (partialReturnQtyStrs[idx] ?? '').trim();
+                        let n = parseInt(raw, 10);
+                        if (raw === '' || Number.isNaN(n)) n = 0;
+                        const val = Math.min(item.quantity, Math.max(0, n));
+                        setPartialReturnItems((prev) =>
+                          prev.map((p, i) => (i === idx ? { ...p, quantity: val } : p))
+                        );
+                        setPartialReturnQtyStrs((prev) => {
+                          const x = [...prev];
+                          x[idx] = val === 0 ? '' : String(val);
+                          return x;
+                        });
+                      }}
+                      className={`w-20 rounded border border-gray-300 px-2 py-1 text-center text-sm ${hideNumberSpinners}`}
                     />
                   </div>
                 ))}
@@ -1767,7 +2088,7 @@ export default function AlquileresPage() {
           style={{ minHeight: '100vh', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflowY: 'auto' }}
           onClick={(e) => { if (e.target === e.currentTarget) setIsEditItemsOpen(false); }}
         >
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 my-auto max-h-[90vh] overflow-y-auto">
+          <div className="bg-white w-full max-w-[56rem] rounded-2xl shadow-2xl p-6 my-auto max-h-[90vh] overflow-y-auto">
             <Title className="text-xl font-bold mb-6">Editar Productos - {selectedRental.workName}</Title>
             <div className="space-y-4">
               <div>
@@ -1808,20 +2129,84 @@ export default function AlquileresPage() {
                           <div className="flex items-center gap-3 flex-wrap">
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">Cant:</span>
-                              <button type="button" onClick={() => updateEditingItemQuantity(itemIndex, item.quantity - 1)} disabled={item.quantity <= 1} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">-</button>
                               <input
-                                type="number" min="1" max={availableStock + item.quantity} value={item.quantity}
-                                onChange={(e) => updateEditingItemQuantity(itemIndex, Math.max(1, Math.min(availableStock + item.quantity, parseInt(e.target.value) || 1)))}
-                                className="w-14 text-sm text-center border border-gray-300 rounded px-1 py-0.5 focus:border-blue-500 focus:outline-none"
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="off"
+                                value={editingQtyStrs[itemIndex] ?? ''}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (!isLooseIntString(v)) return;
+                                  setEditingQtyStrs((prev) => {
+                                    const x = [...prev];
+                                    x[itemIndex] = v;
+                                    return x;
+                                  });
+                                }}
+                                onBlur={() => {
+                                  const raw = (editingQtyStrs[itemIndex] ?? '').trim();
+                                  let q = parseInt(raw, 10);
+                                  if (raw === '' || Number.isNaN(q)) q = 0;
+                                  const line = editingRentalItems[itemIndex];
+                                  if (!line) return;
+                                  const product = products.find((p: any) => p.id === line.productId);
+                                  let newQ = q;
+                                  if (product) {
+                                    const totalOthers = editingRentalItems
+                                      .filter((i, idx) => i.productId === line.productId && idx !== itemIndex)
+                                      .reduce((sum, i) => sum + i.quantity, 0);
+                                    const maxQty = Math.max(0, product.stockActual - totalOthers);
+                                    newQ = Math.max(1, Math.min(maxQty, newQ));
+                                  } else {
+                                    newQ = Math.max(1, newQ);
+                                  }
+                                  setEditingRentalItems((items) =>
+                                    items.map((it, idx) =>
+                                      idx === itemIndex
+                                        ? { ...it, quantity: newQ, totalPrice: newQ * it.unitPrice }
+                                        : it
+                                    )
+                                  );
+                                  setEditingQtyStrs((strs) => {
+                                    const n = [...strs];
+                                    n[itemIndex] = String(newQ);
+                                    return n;
+                                  });
+                                }}
+                                title={`Máx. según stock: ${availableStock + item.quantity}`}
+                                className={freeIntInputCls}
                               />
-                              <button type="button" onClick={() => updateEditingItemQuantity(itemIndex, item.quantity + 1)} disabled={item.quantity >= (availableStock + item.quantity)} className="w-6 h-6 text-xs bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50">+</button>
                             </div>
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">$/día:</span>
                               <input
-                                type="number" min="0" value={item.dailyPrice || item.unitPrice}
-                                onChange={(e) => updateEditingItemDailyPrice(itemIndex, parseFloat(e.target.value) || 0)}
-                                className="w-20 text-sm text-center border border-gray-300 rounded px-1 py-0.5 focus:border-blue-500 focus:outline-none"
+                                type="text"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                value={editingDailyStrs[itemIndex] ?? ''}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (!isLooseDecimalString(v)) return;
+                                  setEditingDailyStrs((prev) => {
+                                    const x = [...prev];
+                                    x[itemIndex] = v;
+                                    return x;
+                                  });
+                                }}
+                                onBlur={() => {
+                                  const raw = (editingDailyStrs[itemIndex] ?? '')
+                                    .trim()
+                                    .replace(',', '.');
+                                  let n = parseFloat(raw);
+                                  if (raw === '' || Number.isNaN(n)) n = 0;
+                                  updateEditingItemDailyPrice(itemIndex, n);
+                                  setEditingDailyStrs((prev) => {
+                                    const x = [...prev];
+                                    x[itemIndex] = n === 0 ? '' : String(n);
+                                    return x;
+                                  });
+                                }}
+                                className={freeDecimalInputCls}
                               />
                           </div>
                             <div className="flex items-center gap-1">
@@ -1872,16 +2257,44 @@ export default function AlquileresPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Pagado</label>
-                <TextInput
-                  type="number" min="0" max={selectedRental.totalPrice || 0}
-                  value={pagado.toString()}
-                  onChange={(e) => setPagado(Math.max(0, Math.min(selectedRental.totalPrice || 0, parseFloat(e.target.value) || 0)))}
-                  className="pl-4"
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={pagadoInputStr}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(',', '.');
+                    if (!isLooseDecimalString(v)) return;
+                    setPagadoInputStr(v);
+                  }}
+                  onBlur={() => {
+                    const cap = selectedRental.totalPrice || 0;
+                    const raw = String(pagadoInputStr).trim().replace(',', '.');
+                    const n = parseFloat(raw);
+                    if (raw === '' || Number.isNaN(n)) {
+                      setPagado(0);
+                      setPagadoInputStr('');
+                      return;
+                    }
+                    const clamped = Math.max(0, Math.min(cap, n));
+                    setPagado(clamped);
+                    setPagadoInputStr(clamped === 0 ? '' : String(clamped));
+                  }}
+                  className={`w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none shadow-sm ${hideNumberSpinners}`}
+                  autoComplete="off"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Resto</label>
-                <Text className="text-lg font-semibold text-orange-600">${((selectedRental.totalPrice || 0) - pagado).toLocaleString()}</Text>
+                <Text className="text-lg font-semibold text-orange-600">${(() => {
+                  const cap = selectedRental.totalPrice || 0;
+                  const raw = String(pagadoInputStr).trim().replace(',', '.');
+                  const n = parseFloat(raw);
+                  const p =
+                    raw === '' || Number.isNaN(n)
+                      ? 0
+                      : Math.max(0, Math.min(cap, n));
+                  return (cap - p).toLocaleString();
+                })()}</Text>
               </div>
               <div className="flex justify-end gap-2 pt-4 border-t">
                 <button onClick={() => setIsEditPaymentOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all">Cancelar</button>
@@ -1952,6 +2365,7 @@ export default function AlquileresPage() {
                     onChange={(e) => {
                       setTransferFromObra(e.target.value);
                       setTransferItems([]);
+                      setTransferQtyDraft({});
                     }}
                     className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
                   >
@@ -1988,10 +2402,17 @@ export default function AlquileresPage() {
                     return (
                       <div className="border border-gray-200 rounded-xl divide-y max-h-60 overflow-y-auto">
                         {fromRental.items.map((item: any) => {
-                          const existingTransfer = transferItems.find((ti: any) => ti.productId === item.productId);
+                          const tid = item.productId;
+                          const existingTransfer = transferItems.find((ti: any) => ti.productId === tid);
                           const currentTransferQty = existingTransfer?.quantity || 0;
                           const availableQuantity = item.quantity; // Cantidad total disponible
                           const remainingQuantity = availableQuantity - currentTransferQty;
+                          const displayTransfer =
+                            tid in transferQtyDraft
+                              ? transferQtyDraft[tid]
+                              : currentTransferQty === 0
+                                ? ''
+                                : String(currentTransferQty);
                           return (
                             <div key={item.productId} className="p-3 flex justify-between items-center">
                               <div className="flex-1">
@@ -2002,30 +2423,56 @@ export default function AlquileresPage() {
                         </div>
                               <div className="flex items-center gap-2">
                                 <input
-                                  type="number"
-                                  min="0"
-                                  max={availableQuantity}
-                                  value={currentTransferQty}
+                                  type="text"
+                                  inputMode="numeric"
+                                  autoComplete="off"
+                                  value={displayTransfer}
                                   onChange={(e) => {
-                                    const qty = Math.max(0, Math.min(availableQuantity, parseInt(e.target.value) || 0));
+                                    const v = e.target.value;
+                                    if (!isLooseIntString(v)) return;
+                                    setTransferQtyDraft((d) => ({ ...d, [tid]: v }));
+                                  }}
+                                  onBlur={() => {
+                                    const raw = (
+                                      tid in transferQtyDraft
+                                        ? transferQtyDraft[tid]
+                                        : currentTransferQty === 0
+                                          ? ''
+                                          : String(currentTransferQty)
+                                    ).trim();
+                                    let parsed = parseInt(raw, 10);
+                                    if (raw === '' || Number.isNaN(parsed)) parsed = 0;
+                                    const qty = Math.max(0, Math.min(availableQuantity, parsed));
                                     if (qty === 0) {
-                                      setTransferItems(transferItems.filter((ti: any) => ti.productId !== item.productId));
+                                      setTransferItems((ti) =>
+                                        ti.filter((t: any) => t.productId !== tid)
+                                      );
+                                      setTransferQtyDraft((d) => ({ ...d, [tid]: '' }));
                                     } else {
-                                      const existing = transferItems.find((ti: any) => ti.productId === item.productId);
-                                      if (existing) {
-                                        setTransferItems(transferItems.map((ti: any) => 
-                                          ti.productId === item.productId ? { ...ti, quantity: qty } : ti
-                                        ));
-                                      } else {
-                                        setTransferItems([...transferItems, {
-                                          productId: item.productId,
-                                          productName: item.productName,
-                                          quantity: qty,
-                                        }]);
-                                      }
+                                      setTransferItems((ti) => {
+                                        const existing = ti.find((t: any) => t.productId === tid);
+                                        if (existing) {
+                                          return ti.map((t: any) =>
+                                            t.productId === tid ? { ...t, quantity: qty } : t
+                                          );
+                                        }
+                                        return [
+                                          ...ti,
+                                          {
+                                            productId: tid,
+                                            productName: item.productName,
+                                            quantity: qty,
+                                          },
+                                        ];
+                                      });
+                                      setTransferQtyDraft((d) => {
+                                        const next = { ...d };
+                                        delete next[tid];
+                                        return next;
+                                      });
                                     }
                                   }}
-                                  className="w-20 rounded-lg border border-gray-300 px-2 py-1 text-sm text-center"
+                                  className={`w-24 rounded-lg border border-gray-300 px-2 py-1 text-sm text-center ${hideNumberSpinners}`}
                                 />
                                 <span className="text-xs text-gray-500">uds</span>
                       </div>
@@ -2061,6 +2508,7 @@ export default function AlquileresPage() {
                     setTransferFromObra('');
                     setTransferToObra('');
                     setTransferItems([]);
+                    setTransferQtyDraft({});
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"
                 >
@@ -2134,6 +2582,7 @@ export default function AlquileresPage() {
                         setTransferFromObra('');
                         setTransferToObra('');
                         setTransferItems([]);
+                        setTransferQtyDraft({});
                         alert('Traslado realizado exitosamente. Los remitos se han descargado.');
                       } catch (error) {
                         console.error('Error al realizar traslado:', error);
@@ -2146,6 +2595,68 @@ export default function AlquileresPage() {
                 </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rentalToDelete && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-4"
+          style={{
+            minHeight: '100vh',
+            height: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeDeleteRentalModal();
+          }}
+        >
+          <div
+            className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Title className="text-lg font-bold text-red-800 mb-3">Eliminar alquiler</Title>
+            <div className="text-sm text-gray-700 space-y-2 mb-4">
+              <p>Obra: <span className="font-semibold">{rentalToDelete.workName}</span></p>
+              <p>Cliente: <span className="font-semibold">{rentalToDelete.clientName}</span></p>
+              <p>Estado: <span className="font-semibold">{rentalToDelete.status}</span></p>
+              <p>Total: <span className="font-semibold">${(rentalToDelete.totalPrice || 0).toLocaleString()}</span></p>
+              <p className="pt-2 border-t border-gray-100 text-gray-600">
+                Se borrarán el alquiler, sus ítems y el historial de cobros. El stock se actualizará según las cantidades actuales de cada producto. Esta acción no se puede deshacer.
+              </p>
+            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Escriba <span className="font-mono font-bold">ELIMINAR</span> para confirmar
+            </label>
+            <input
+              type="text"
+              autoComplete="off"
+              value={deletePhraseInput}
+              onChange={(e) => setDeletePhraseInput(e.target.value)}
+              className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-red-500 focus:outline-none mb-4"
+              placeholder="ELIMINAR"
+              disabled={deleteRentalLoading}
+            />
+            <div className="flex justify-end gap-3 pt-2 border-t">
+              <button
+                type="button"
+                onClick={closeDeleteRentalModal}
+                disabled={deleteRentalLoading}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void executeDeleteRental()}
+                disabled={deleteRentalLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-all shadow-md disabled:opacity-50"
+              >
+                {deleteRentalLoading ? 'Eliminando…' : 'Eliminar definitivamente'}
+              </button>
             </div>
           </div>
         </div>

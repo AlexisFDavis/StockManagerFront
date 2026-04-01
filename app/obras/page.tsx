@@ -505,7 +505,7 @@ export default function ObrasPage() {
             }
           }}
         >
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6 my-auto">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 my-auto">
             <Title className="text-xl font-bold mb-6">
               {editingObra ? `Edición de ${editingObra.name}` : 'Nueva Obra'}
             </Title>

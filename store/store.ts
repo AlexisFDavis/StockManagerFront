@@ -1,6 +1,21 @@
 import { create } from 'zustand';
-import { Product, Rental, Client, RentalItem, Obra, StockMovement, PaymentHistory, StockAddHistory } from '@/types';
+import { Product, Rental, Client, RentalItem, Obra, StockMovement, PaymentHistory } from '@/types';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api-client';
+
+/** La API Prisma devuelve stockAddHistory; el front usa addHistory */
+function normalizeProductFromApi(p: any): Product {
+  const { stockAddHistory, ...rest } = p;
+  const history = stockAddHistory ?? p.addHistory ?? [];
+  return {
+    ...rest,
+    addHistory: Array.isArray(history)
+      ? history.map((h: any) => ({
+          ...h,
+          date: typeof h.date === 'string' ? h.date : new Date(h.date).toISOString(),
+        }))
+      : [],
+  };
+}
 
 interface StoreState {
   // Estado
@@ -50,6 +65,7 @@ interface StoreState {
   reactivateRental: (id: string) => Promise<void>;
   partialReturn: (rentalId: string, itemsToReturn: { productId: string; quantity: number }[]) => Promise<void>;
   transferStockBetweenObras: (fromObraId: string, toObraId: string, items: { productId: string; quantity: number }[]) => Promise<void>;
+  deleteRental: (id: string) => Promise<void>;
   
   // Utilidades
   getStockMovementsByObra: (obraId: string) => StockMovement[];
@@ -77,8 +93,8 @@ export const useStore = create<StoreState>((set: any, get: any) => ({
   // Carga de datos desde la API
   loadProducts: async () => {
     try {
-      const products = await apiGet<Product[]>('products');
-      set({ products });
+      const raw = await apiGet<any[]>('products');
+      set({ products: raw.map(normalizeProductFromApi) });
     } catch (error) {
       console.error('Error al cargar productos:', error);
       throw error;
@@ -129,7 +145,8 @@ export const useStore = create<StoreState>((set: any, get: any) => ({
   // Productos
   addProduct: async (product) => {
     try {
-      const newProduct = await apiPost<Product>('products', product);
+      const raw = await apiPost<any>('products', product);
+      const newProduct = normalizeProductFromApi(raw);
       set((state: any) => ({
         products: [...state.products, newProduct]
       }));
@@ -141,7 +158,8 @@ export const useStore = create<StoreState>((set: any, get: any) => ({
   
   updateProduct: async (id, product) => {
     try {
-      const updatedProduct = await apiPut<Product>(`products/${id}`, product);
+      const raw = await apiPut<any>(`products/${id}`, product);
+      const updatedProduct = normalizeProductFromApi(raw);
       set((state: any) => ({
         products: state.products.map((p: Product) => 
           p.id === id ? updatedProduct : p
@@ -436,6 +454,18 @@ export const useStore = create<StoreState>((set: any, get: any) => ({
       await get().loadStockMovements();
     } catch (error) {
       console.error('Error al transferir stock:', error);
+      throw error;
+    }
+  },
+
+  deleteRental: async (id) => {
+    try {
+      await apiDelete(`rentals/${id}`);
+      await get().loadRentals();
+      await get().loadProducts();
+      await get().loadObras();
+    } catch (error) {
+      console.error('Error al eliminar alquiler:', error);
       throw error;
     }
   },

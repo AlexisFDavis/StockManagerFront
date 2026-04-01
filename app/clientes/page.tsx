@@ -358,7 +358,7 @@ export default function ClientesPage() {
             }
           }}
         >
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6">
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl p-6">
             <Title className="text-xl font-bold mb-6">{editingClient ? `Edición de ${editingClient.name}` : 'Nuevo Cliente'}</Title>
             <form onSubmit={handleSubmit} className="space-y-4">
             <div>

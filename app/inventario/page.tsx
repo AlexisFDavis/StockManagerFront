@@ -104,9 +104,10 @@ export default function InventarioPage() {
   // Obtener información de dónde está alquilado el producto
   const getProductRentals = (productId: string) => {
     return rentals
-      .filter((rental: any) => 
-        rental.status === 'iniciado' && 
-        rental.items.some((item: any) => item.productId === productId)
+      .filter(
+        (rental: any) =>
+          rental.status !== 'finalizado' &&
+          rental.items.some((item: any) => item.productId === productId)
       )
       .map((rental: any) => {
         const item = rental.items.find((i: any) => i.productId === productId);
@@ -293,7 +294,7 @@ export default function InventarioPage() {
             }
           }}
         >
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6">
             <Title className="text-xl font-bold mb-6">
               {editingProduct ? `Edición de ${editingProduct.name}` : 'Nuevo Producto'}
             </Title>
@@ -479,7 +480,13 @@ export default function InventarioPage() {
                               </div>
                             </div>
                             <Badge color="blue" size="sm">
-                              {rental.status === 'iniciado' ? 'Iniciado' : rental.status}
+                              {rental.status === 'sin presupuestar'
+                                ? 'Sin presup.'
+                                : rental.status === 'presupuestado'
+                                  ? 'Presupuestado'
+                                  : rental.status === 'iniciado'
+                                    ? 'Iniciado'
+                                    : rental.status}
                             </Badge>
                           </div>
                         </div>
@@ -493,9 +500,12 @@ export default function InventarioPage() {
                 );
               })()}
 
-              {/* Historial de Añadidos */}
+              {/* Historial de Añadidos (entradas de stock al inventario; no incluye alquileres) */}
               <div className="border-t border-gray-200 pt-4">
-                <Title className="text-lg font-bold mb-3">Historial de Añadidos</Title>
+                <Title className="text-lg font-bold mb-2">Historial de Añadidos</Title>
+                <Text className="text-xs text-gray-500 mb-3 block">
+                  Registra compras, creación del producto y otras altas manuales de stock. Las salidas por alquiler no aparecen aquí; véase «Alquilado en» arriba.
+                </Text>
                 {selectedProduct.addHistory && selectedProduct.addHistory.length > 0 ? (
                   <div className="border border-gray-200 rounded-xl divide-y overflow-hidden">
                     <div className="grid grid-cols-4 gap-2 p-3 bg-gray-100 text-xs font-semibold text-gray-600">
