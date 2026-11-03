@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth-server'
+import { recalcRentalTotals } from '@/lib/rental-totals'
 
 // POST /api/rentals/transfer
 export async function POST(request: NextRequest) {
@@ -205,36 +206,12 @@ export async function POST(request: NextRequest) {
       })
     }
     
-    // Recalcular totalPrice de ambos rentals
-    const updatedFromRental = await prisma.rental.findUnique({
-      where: { id: fromRental.id },
-      include: { items: true }
-    })
-    
-    const updatedToRental = await prisma.rental.findUnique({
-      where: { id: toRental.id },
-      include: { items: true }
-    })
-    
-    const fromTotalPrice = updatedFromRental?.items.reduce((sum: number, item: any) => sum + item.totalPrice, 0) || 0
-    const toTotalPrice = updatedToRental?.items.reduce((sum: number, item: any) => sum + item.totalPrice, 0) || 0
-    
-    await prisma.rental.update({
-      where: { id: fromRental.id },
-      data: {
-        totalPrice: fromTotalPrice,
-        resto: fromTotalPrice - (fromRental.pagado || 0),
-        updatedById: user.id
-      }
-    })
-    
-    await prisma.rental.update({
-      where: { id: toRental.id },
-      data: {
-        totalPrice: toTotalPrice,
-        resto: toTotalPrice - (toRental.pagado || 0),
-        updatedById: user.id
-      }
+    // Recalcular totales de ambos alquileres (presupuesto por período, ver lib/rental-totals)
+    await recalcRentalTotals(prisma, fromRental.id)
+    await recalcRentalTotals(prisma, toRental.id)
+    await prisma.rental.updateMany({
+      where: { id: { in: [fromRental.id, toRental.id] } },
+      data: { updatedById: user.id }
     })
     
     // Obtener los rentals actualizados para la respuesta

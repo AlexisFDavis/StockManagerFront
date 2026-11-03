@@ -1,5 +1,6 @@
 'use client';
 
+import { toDay } from '@/lib/rental-billing';
 import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/store/store';
 import {
@@ -474,7 +475,7 @@ export default function InventarioPage() {
                                 <div>
                                   <Text className="text-gray-500">Devolución:</Text>
                                   <Text className="font-semibold text-gray-900 ml-1">
-                                    {format(new Date(rental.returnDate), 'dd/MM/yyyy')}
+                                    {format(toDay(rental.returnDate), 'dd/MM/yyyy')}
                                   </Text>
                                 </div>
                               </div>

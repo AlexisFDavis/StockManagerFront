@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth-server'
+import { rentalTotals } from '@/lib/rental-totals'
 
 // GET /api/rentals
 export async function GET(request: NextRequest) {
@@ -76,11 +77,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { workId, clientId, items, returnDate, notes } = body
     
-    // Calcular totalPrice
-    const totalPrice = items.reduce((sum: number, item: any) => {
-      return sum + (item.totalPrice || 0)
-    }, 0)
-    
+    // Presupuesto: cada ítem desde su fecha de adición hasta la devolución (meses a precio mensual + días sueltos)
+    const { itemTotals, totalPrice } = rentalTotals(items, returnDate, 0, 0)
+
     const rental = await prisma.rental.create({
       data: {
         workId,
@@ -94,12 +93,12 @@ export async function POST(request: NextRequest) {
         createdById: user.id,
         updatedById: user.id,
         items: {
-          create: items.map((item: any) => ({
+          create: items.map((item: any, i: number) => ({
             productId: item.productId,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             dailyPrice: item.dailyPrice,
-            totalPrice: item.totalPrice,
+            totalPrice: itemTotals[i],
             addedDate: new Date(item.addedDate)
           }))
         }

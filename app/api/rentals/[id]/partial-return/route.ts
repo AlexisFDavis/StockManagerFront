@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth-server'
+import { recalcRentalTotals } from '@/lib/rental-totals'
 
 // POST /api/rentals/[id]/partial-return
 export async function POST(
@@ -70,8 +71,7 @@ export async function POST(
         if (newQuantity <= 0) return null
         return {
           ...item,
-          quantity: newQuantity,
-          totalPrice: newQuantity * item.unitPrice
+          quantity: newQuantity
         }
       }
       return item
@@ -96,19 +96,16 @@ export async function POST(
       })
     }
     
-    const newTotalPrice = updatedItems.reduce((sum: number, item: any) => sum + item.totalPrice, 0)
     const newStatus = updatedItems.length === 0 ? 'finalizado' : 'iniciado'
-    const newResto = Math.max(0, newTotalPrice - (rental.pagado || 0))
-    
-    const updatedRental = await prisma.rental.update({
+
+    await prisma.rental.update({
       where: { id: params.id },
-      data: {
-        items: undefined, // Ya se actualizaron arriba
-        totalPrice: newTotalPrice,
-        resto: newResto,
-        status: newStatus,
-        updatedById: user.id
-      },
+      data: { status: newStatus, updatedById: user.id }
+    })
+    await recalcRentalTotals(prisma, params.id)
+
+    const updatedRental = await prisma.rental.findUniqueOrThrow({
+      where: { id: params.id },
       include: {
         obra: {
           include: {

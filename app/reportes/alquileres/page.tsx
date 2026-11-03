@@ -1,5 +1,6 @@
 'use client';
 
+import { toDay } from '@/lib/rental-billing';
 import { useMemo, useState } from 'react';
 import { useStore } from '@/store/store';
 import {
@@ -46,7 +47,7 @@ export default function ReportesAlquileresPage() {
   const finalizados = rentals.filter((r: any) => r.status === 'finalizado').length;
   const totalRevenue = rentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
   const avgRentalValue = totalRentals > 0 ? totalRevenue / totalRentals : 0;
-  const overdueRentals = rentals.filter((r: any) => r.status === 'iniciado' && new Date(r.returnDate) < new Date()).length;
+  const overdueRentals = rentals.filter((r: any) => r.status === 'iniciado' && toDay(r.returnDate) < toDay(new Date())).length;
   
   // Ingresos por estado
   const activeRevenue = rentals
@@ -336,7 +337,7 @@ export default function ReportesAlquileresPage() {
                     <td className="p-3">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
                         r.status === 'iniciado' 
-                          ? new Date(r.returnDate) < new Date() 
+                          ? toDay(r.returnDate) < toDay(new Date()) 
                             ? 'bg-red-100 text-red-700' 
                             : 'bg-green-100 text-green-700'
                           : r.status === 'presupuestado'
@@ -346,7 +347,7 @@ export default function ReportesAlquileresPage() {
                           : 'bg-gray-100 text-gray-700'
                       }`}>
                         {r.status === 'iniciado' 
-                          ? new Date(r.returnDate) < new Date() ? 'Vencido' : 'Iniciado'
+                          ? toDay(r.returnDate) < toDay(new Date()) ? 'Vencido' : 'Iniciado'
                           : r.status === 'presupuestado' ? 'Presupuestado'
                           : r.status === 'sin presupuestar' ? 'Sin presupuestar'
                           : 'Finalizado'}

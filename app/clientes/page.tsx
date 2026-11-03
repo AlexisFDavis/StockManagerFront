@@ -1,5 +1,6 @@
 'use client';
 
+import { toDay } from '@/lib/rental-billing';
 import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/store/store';
 import {
@@ -321,7 +322,7 @@ export default function ClientesPage() {
                             ))}
                           </div>
                           <div className="flex justify-between text-xs">
-                            <Text className="text-gray-500">Devolución: {format(new Date(rental.returnDate), 'dd/MM/yyyy')}</Text>
+                            <Text className="text-gray-500">Devolución: {format(toDay(rental.returnDate), 'dd/MM/yyyy')}</Text>
                             <Text className="font-bold">${rental.totalPrice.toLocaleString()}</Text>
                           </div>
                         </div>

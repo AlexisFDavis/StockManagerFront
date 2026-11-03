@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth-server'
+import { recalcRentalTotals } from '@/lib/rental-totals'
 
 // GET /api/rentals/[id]
 export async function GET(
@@ -89,7 +90,7 @@ export async function PUT(
       updatedById: user.id
     }
     
-    // Si se actualizan items, recalcular totalPrice
+    // Los totales se recalculan al final (recalcRentalTotals) según ítems + fecha de devolución
     if (items !== undefined) {
       // Eliminar items antiguos
       await prisma.rentalItem.deleteMany({
@@ -97,10 +98,6 @@ export async function PUT(
       })
       
       // Crear nuevos items
-      const totalPrice = items.reduce((sum: number, item: any) => {
-        return sum + (item.totalPrice || item.quantity * item.unitPrice)
-      }, 0)
-      
       await prisma.rentalItem.createMany({
         data: items.map((item: any) => ({
           rentalId: params.id,
@@ -108,26 +105,22 @@ export async function PUT(
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           dailyPrice: item.dailyPrice || item.unitPrice,
-          totalPrice: item.totalPrice || item.quantity * item.unitPrice,
+          totalPrice: 0, // lo calcula recalcRentalTotals
           addedDate: new Date(item.addedDate || new Date())
         }))
       })
-      
-      updateData.totalPrice = totalPrice
-      updateData.resto = totalPrice - (existingRental.pagado || 0)
     }
     
     if (status !== undefined) updateData.status = status
-    if (pagado !== undefined) {
-      updateData.pagado = pagado
-      updateData.resto = (updateData.totalPrice || existingRental.totalPrice) - pagado
-    }
+    if (pagado !== undefined) updateData.pagado = pagado
     if (notes !== undefined) updateData.notes = notes
     if (returnDate !== undefined) updateData.returnDate = new Date(returnDate)
     
-    const rental = await prisma.rental.update({
+    await prisma.rental.update({ where: { id: params.id }, data: updateData })
+    await recalcRentalTotals(prisma, params.id)
+
+    const rental = await prisma.rental.findUniqueOrThrow({
       where: { id: params.id },
-      data: updateData,
       include: {
         obra: {
           include: {

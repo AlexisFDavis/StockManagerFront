@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth-server'
+import { recalcRentalTotals } from '@/lib/rental-totals'
 
 // POST /api/rentals/[id]/payments
 export async function POST(
@@ -38,20 +39,26 @@ export async function POST(
       }
     })
     
-    // Actualizar fecha de devolución (extender un mes)
-    const currentReturnDate = new Date(rental.returnDate)
-    const nextMonth = new Date(currentReturnDate)
-    nextMonth.setMonth(nextMonth.getMonth() + 1)
-    
-    // Consolidar items y resetear fecha de adición
+    // Próximo vencimiento: mismo día del mes siguiente (18/11 → 18/12).
+    // Las fechas se guardan a medianoche UTC → operar en UTC para no depender del TZ del server.
+    // Si el día no existe en el mes siguiente (31/01 → feb), se ajusta al último día del mes.
+    const current = new Date(rental.returnDate)
+    const y = current.getUTCFullYear()
+    const m = current.getUTCMonth() + 1
+    const lastDayNext = new Date(Date.UTC(y, m + 1, 0)).getUTCDate()
+    const nextMonth = new Date(Date.UTC(y, m, Math.min(current.getUTCDate(), lastDayNext)))
+
+    // Consolidar items: el próximo período arranca donde terminó el cobrado (periodTo = 'YYYY-MM-DD')
     const newAddedDate = new Date(periodTo)
+    // Agrupar por producto + precio: si el mismo producto se cargó a dos precios distintos, no perder ninguno
     const itemsByProduct: Record<string, any[]> = {}
-    
+
     rental.items.forEach((item: any) => {
-      if (!itemsByProduct[item.productId]) {
-        itemsByProduct[item.productId] = []
+      const key = `${item.productId}|${item.dailyPrice || item.unitPrice}`
+      if (!itemsByProduct[key]) {
+        itemsByProduct[key] = []
       }
-      itemsByProduct[item.productId].push(item)
+      itemsByProduct[key].push(item)
     })
     
     // Eliminar items antiguos y crear consolidados
@@ -60,8 +67,9 @@ export async function POST(
     })
     
     const consolidatedItems = []
-    for (const [productId, items] of Object.entries(itemsByProduct)) {
+    for (const items of Object.values(itemsByProduct)) {
       const firstItem = items[0]
+      const productId = firstItem.productId
       const totalQuantity = items.reduce((sum: number, item: any) => sum + item.quantity, 0)
       
       consolidatedItems.push({
@@ -70,7 +78,7 @@ export async function POST(
         quantity: totalQuantity,
         unitPrice: firstItem.unitPrice,
         dailyPrice: firstItem.dailyPrice || firstItem.unitPrice,
-        totalPrice: totalQuantity * firstItem.unitPrice,
+        totalPrice: 0, // lo calcula recalcRentalTotals
         addedDate: newAddedDate
       })
     }
@@ -79,21 +87,19 @@ export async function POST(
       data: consolidatedItems
     })
     
-    // Recalcular totalPrice
-    const newTotalPrice = consolidatedItems.reduce((sum: number, item: any) => sum + item.totalPrice, 0)
-    const newPagado = (rental.pagado || 0) + amount
-    const newResto = Math.max(0, newTotalPrice - newPagado)
-    
-    // Actualizar rental
-    const updatedRental = await prisma.rental.update({
+    // Total = lo ya cobrado (incluye este cobro) + presupuesto del período nuevo
+    await prisma.rental.update({
       where: { id: params.id },
       data: {
-        totalPrice: newTotalPrice,
-        pagado: newPagado,
-        resto: newResto,
+        pagado: (rental.pagado || 0) + amount,
         returnDate: nextMonth,
         updatedById: user.id
-      },
+      }
+    })
+    await recalcRentalTotals(prisma, params.id)
+
+    const updatedRental = await prisma.rental.findUniqueOrThrow({
+      where: { id: params.id },
       include: {
         obra: {
           include: {

@@ -1,5 +1,6 @@
 'use client';
 
+import { toDay } from '@/lib/rental-billing';
 import { useMemo, useState, useEffect } from 'react';
 import { useStore } from '@/store/store';
 import {
@@ -50,7 +51,7 @@ export default function DashboardPage() {
       const matchesSearch = searchText === '' || 
         r.clientName.toLowerCase().includes(searchText.toLowerCase());
       
-      const daysUntil = Math.ceil((new Date(r.returnDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      const daysUntil = Math.round((toDay(r.returnDate).getTime() - toDay(new Date()).getTime()) / (1000 * 60 * 60 * 24));
       let matchesDate = true;
       if (dateFilter === 'overdue') matchesDate = daysUntil < 0;
       if (dateFilter === 'today') matchesDate = daysUntil === 0;
@@ -83,14 +84,14 @@ export default function DashboardPage() {
   const upcomingReturns = useMemo(() => {
     return activeRentals.filter((rental: any) => {
       const daysUntilReturn = Math.ceil(
-        (new Date(rental.returnDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        (toDay(rental.returnDate).getTime() - toDay(new Date()).getTime()) / (1000 * 60 * 60 * 24)
       );
       return daysUntilReturn <= 7 && daysUntilReturn >= 0;
     });
   }, [activeRentals]);
 
   const overdueRentals = useMemo(() => {
-    return activeRentals.filter((r: any) => new Date(r.returnDate) < new Date());
+    return activeRentals.filter((r: any) => toDay(r.returnDate) < toDay(new Date()));
   }, [activeRentals]);
 
   const overdueRentalsAmount = useMemo(() => {
@@ -429,7 +430,7 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-3">
                 {filteredActiveRentals.map((rental: any) => {
-                  const returnDate = new Date(rental.returnDate);
+                  const returnDate = toDay(rental.returnDate);
                   const daysUntilReturn = Math.ceil(
                     (returnDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
                   );

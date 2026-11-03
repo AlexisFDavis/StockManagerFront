@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useStore } from '@/store/store';
 import {
   Card,
@@ -19,8 +19,22 @@ import {
   TableCell,
 } from '@tremor/react';
 import { RentalItem } from '@/types';
-import { format, differenceInDays } from 'date-fns';
+import { format, addMonths } from 'date-fns';
+import {
+  billItem,
+  billItemToDate,
+  dailyFromMonthly,
+  dayKey,
+  dayToIso,
+  formatPeriod,
+  monthlyFromDaily,
+  periodStart,
+  toDay,
+  todayKey,
+} from '@/lib/rental-billing';
 import { generarRemito, generarRecibo, descargarPDF, RemitoData, ReciboData } from '@/app/utils/pdfGenerator';
+import { itemBudget } from '@/lib/rental-totals';
+import { ActionButton, ActionMenu, IconButton, Icons, RowAction } from '@/components/rentals/RentalActions';
 
 /** Quitar flechas nativas de input[type=number] en navegadores WebKit. */
 const hideNumberSpinners =
@@ -36,6 +50,52 @@ const freeDecimalInputCls =
 const isLooseIntString = (s: string) => /^\d*$/.test(s);
 /** Decimal parcial para edición cómoda */
 const isLooseDecimalString = (s: string) => /^-?\d*[.,]?\d*$/.test(s);
+
+const fmtMoney = (n: number) => (n === 0 ? '' : String(Math.round(n * 100) / 100));
+
+/** Input de precio con borrador propio: edición libre, se confirma al perder foco. */
+function MoneyInput({ value, onCommit, title }: { value: number; onCommit: (n: number) => void; title?: string }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      title={title}
+      value={draft ?? fmtMoney(value)}
+      onChange={(e) => {
+        if (isLooseDecimalString(e.target.value)) setDraft(e.target.value);
+      }}
+      onBlur={() => {
+        if (draft === null) return;
+        const n = parseFloat(draft.trim().replace(',', '.'));
+        onCommit(Number.isNaN(n) ? 0 : Math.max(0, n));
+        setDraft(null);
+      }}
+      className={freeDecimalInputCls}
+    />
+  );
+}
+
+/** Par $/mes ↔ $/día: el cliente cotiza por mes; el diario se deriva (mes / 30) y viceversa. */
+function PricePairInputs({ dailyPrice, onDailyChange }: { dailyPrice: number; onDailyChange: (d: number) => void }) {
+  return (
+    <>
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-gray-500">$/mes:</span>
+        <MoneyInput
+          value={monthlyFromDaily(dailyPrice)}
+          onCommit={(m) => onDailyChange(dailyFromMonthly(m))}
+          title="Precio mensual por unidad"
+        />
+      </div>
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-gray-500">$/día:</span>
+        <MoneyInput value={dailyPrice} onCommit={onDailyChange} title="Precio diario por unidad (mes / 30)" />
+      </div>
+    </>
+  );
+}
 
 export default function AlquileresPage() {
   const products = useStore((state: any) => state.products);
@@ -96,9 +156,7 @@ export default function AlquileresPage() {
   const [newRentalNotes, setNewRentalNotes] = useState('');
   /** Borradores para mostrar '' mientras se edita (nuevo alquiler, por productId) */
   const [newRentalQtyDraft, setNewRentalQtyDraft] = useState<Record<string, string>>({});
-  const [newRentalDailyDraft, setNewRentalDailyDraft] = useState<Record<string, string>>({});
   const [editingQtyStrs, setEditingQtyStrs] = useState<string[]>([]);
-  const [editingDailyStrs, setEditingDailyStrs] = useState<string[]>([]);
   const [partialReturnQtyStrs, setPartialReturnQtyStrs] = useState<string[]>([]);
   const [transferQtyDraft, setTransferQtyDraft] = useState<Record<string, string>>({});
   const [billingItemDiscountStr, setBillingItemDiscountStr] = useState<Record<string, string>>({});
@@ -109,6 +167,7 @@ export default function AlquileresPage() {
 
   // Details modal
   const [detailsNotes, setDetailsNotes] = useState('');
+  const autoStartedRef = useRef<Set<string>>(new Set());
 
   // Billing modal
   const [billingDateFrom, setBillingDateFrom] = useState('');
@@ -134,10 +193,10 @@ export default function AlquileresPage() {
       
       let matchesDate = true;
       if (dateFrom) {
-        matchesDate = new Date(rental.returnDate) >= new Date(dateFrom);
+        matchesDate = toDay(rental.returnDate) >= toDay(dateFrom);
       }
       if (dateTo && matchesDate) {
-        matchesDate = new Date(rental.returnDate) <= new Date(dateTo);
+        matchesDate = toDay(rental.returnDate) <= toDay(dateTo);
       }
       
       return matchesSearch && matchesStatus && matchesDate;
@@ -167,7 +226,7 @@ export default function AlquileresPage() {
   const totalActiveRentals = activeRentals.length;
   const totalRevenue = rentals.reduce((sum: number, r: any) => sum + r.totalPrice, 0);
   const upcomingReturns = activeRentals.filter((r: any) => {
-    const daysUntil = Math.ceil((new Date(r.returnDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    const daysUntil = Math.round((toDay(r.returnDate).getTime() - toDay(new Date()).getTime()) / (1000 * 60 * 60 * 24));
     return daysUntil <= 3 && daysUntil >= 0;
   }).length;
 
@@ -179,37 +238,14 @@ export default function AlquileresPage() {
     }, 0);
   };
 
-  const calculateBillingForItem = (item: any, fromDate: Date, toDate: Date) => {
-    const itemAddedDate = new Date(item.addedDate);
-    const effectiveFrom = itemAddedDate > fromDate ? itemAddedDate : fromDate;
-    const days = Math.max(0, differenceInDays(toDate, effectiveFrom) + 1);
-    const dailyRate = (item.dailyPrice || item.unitPrice) * item.quantity;
-    return { days, dailyRate, total: days * dailyRate };
-  };
+  const calculateToDateBilling = (rental: any) =>
+    rental.items.reduce((sum: number, item: any) => sum + billItemToDate(item).total, 0);
 
-  const calculateBillingTotal = (rental: any, fromDate: Date, toDate: Date) => {
-    return rental.items.reduce((sum: number, item: any) => {
-      const billing = calculateBillingForItem(item, fromDate, toDate);
-      return sum + billing.total;
-    }, 0);
-  };
-
-  const calculateToDateBilling = (rental: any) => {
-    const now = new Date();
-    // Normalizar fecha actual a medianoche para cálculo preciso
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    return rental.items.reduce((sum: number, item: any) => {
-      const addedDate = new Date(item.addedDate);
-      // Normalizar fecha de adición a medianoche
-      const addedDateNormalized = new Date(addedDate.getFullYear(), addedDate.getMonth(), addedDate.getDate());
-      
-      // Calcular días transcurridos (incluyendo el día de adición)
-      const days = Math.max(1, differenceInDays(today, addedDateNormalized) + 1);
-      const dailyRate = (item.dailyPrice || item.unitPrice) * item.quantity;
-      return sum + (days * dailyRate);
-    }, 0);
-  };
+  /** Período "Vencimiento": desde la adición más antigua hasta la fecha de devolución que cargó el usuario. */
+  const vencimientoPeriod = (rental: any) => ({
+    from: periodStart(rental),
+    to: toDay(rental.returnDate),
+  });
 
   // ========== Dialog openers ==========
 
@@ -220,7 +256,6 @@ export default function AlquileresPage() {
     setPagado(0);
     setNewRentalNotes('');
     setNewRentalQtyDraft({});
-    setNewRentalDailyDraft({});
     setIsDialogOpen(true);
   };
 
@@ -233,12 +268,9 @@ export default function AlquileresPage() {
   const openBillingDialog = (rental: any) => {
     setSelectedRental(rental);
     setBillingMode('vencimiento');
-    // Para modo vencimiento, desde la fecha de devolución actual
-    const returnDate = new Date(rental.returnDate);
-    const nextMonth = new Date(returnDate);
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    setBillingDateFrom(rental.returnDate.split('T')[0]);
-    setBillingDateTo(nextMonth.toISOString().split('T')[0]);
+    const { from, to } = vencimientoPeriod(rental);
+    setBillingDateFrom(dayKey(from));
+    setBillingDateTo(dayKey(to));
     setDiscountType('none');
     setItemDiscounts({});
     setTotalDiscount({ type: 'percent', value: 0 });
@@ -252,12 +284,6 @@ export default function AlquileresPage() {
     const items = rental.items.map((item: any) => ({ ...item }));
     setEditingRentalItems(items);
     setEditingQtyStrs(items.map((i: any) => (i.quantity === 0 ? '' : String(i.quantity))));
-    setEditingDailyStrs(
-      items.map((i: any) => {
-        const d = i.dailyPrice ?? i.unitPrice;
-        return d === 0 ? '' : String(d);
-      })
-    );
     setIsEditItemsOpen(true);
   };
 
@@ -278,7 +304,8 @@ export default function AlquileresPage() {
 
   const openEditField = (rental: any, field: string, value: any) => {
     setSelectedRental(rental);
-    setEditField({ field, value });
+    // <input type="date"> necesita YYYY-MM-DD; con el ISO completo quedaba vacío
+    setEditField({ field, value: field === 'returnDate' && value ? dayKey(value) : value });
     setIsEditFieldOpen(true);
   };
 
@@ -334,16 +361,11 @@ export default function AlquileresPage() {
           unitPrice: product.price,
           dailyPrice: product.price,
           totalPrice: product.price,
-          addedDate: new Date().toISOString(),
+          addedDate: dayToIso(todayKey()),
         }]);
       }
     }
     setNewRentalQtyDraft((d) => {
-      const next = { ...d };
-      delete next[productId];
-      return next;
-    });
-    setNewRentalDailyDraft((d) => {
       const next = { ...d };
       delete next[productId];
       return next;
@@ -353,11 +375,6 @@ export default function AlquileresPage() {
   const removeItemFromRental = (productId: string) => {
     setRentalItems(rentalItems.filter((item) => item.productId !== productId));
     setNewRentalQtyDraft((d) => {
-      const next = { ...d };
-      delete next[productId];
-      return next;
-    });
-    setNewRentalDailyDraft((d) => {
       const next = { ...d };
       delete next[productId];
       return next;
@@ -416,7 +433,11 @@ export default function AlquileresPage() {
     );
   };
 
-  const calculatedTotal = useMemo(() => rentalItems.reduce((sum, item) => sum + item.totalPrice, 0), [rentalItems]);
+  /** Presupuesto real: cada ítem desde su adición hasta la devolución (antes era cantidad × precio, sin período). */
+  const calculatedTotal = useMemo(
+    () => (returnDate ? rentalItems.reduce((sum, item) => sum + itemBudget(item, returnDate), 0) : 0),
+    [rentalItems, returnDate]
+  );
   const calculatedDailyTotal = useMemo(() => rentalItems.reduce((sum, item) => sum + (item.dailyPrice || item.unitPrice) * item.quantity, 0), [rentalItems]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -508,9 +529,8 @@ export default function AlquileresPage() {
     if (totalQuantityInRental < product.stockActual) {
       // Siempre crear un nuevo item, incluso si ya existe uno del mismo producto
       // Esto permite tener items del mismo producto con diferentes fechas de adición
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0]; // Solo la fecha, sin hora
-      
+      const todayStr = todayKey(); // fecha local (toISOString daba el día siguiente después de las 21hs)
+
       setEditingRentalItems([...editingRentalItems, {
         productId: product.id,
         productName: product.name,
@@ -521,14 +541,12 @@ export default function AlquileresPage() {
         addedDate: new Date(todayStr).toISOString(), // Fecha actual como fecha de adición
       }]);
       setEditingQtyStrs((s) => [...s, '1']);
-      setEditingDailyStrs((s) => [...s, String(product.price)]);
     }
   };
 
   const removeItemFromEditingRental = (itemIndex: number) => {
     setEditingRentalItems(editingRentalItems.filter((_, index) => index !== itemIndex));
     setEditingQtyStrs((s) => s.filter((_, i) => i !== itemIndex));
-    setEditingDailyStrs((s) => s.filter((_, i) => i !== itemIndex));
   };
 
   const updateEditingItemDailyPrice = (itemIndex: number, dailyPrice: number) => {
@@ -635,7 +653,7 @@ export default function AlquileresPage() {
   };
 
   const getDaysUntilReturn = (returnDateStr: string) => {
-    return Math.ceil((new Date(returnDateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return Math.round((toDay(returnDateStr).getTime() - toDay(new Date()).getTime()) / (1000 * 60 * 60 * 24));
   };
 
   const getStatusBadge = (rental: any) => {
@@ -658,6 +676,47 @@ export default function AlquileresPage() {
     }
   };
 
+  /**
+   * Una sola fuente de verdad para las acciones de cada fila (desktop y mobile).
+   * `primary`: las 1-2 acciones del próximo paso lógico; `menu`: el resto, en el "⋯".
+   */
+  const getRowActions = (rental: any): { primary: RowAction[]; menu: RowAction[] } => {
+    const next = getNextStatusAction(rental);
+    const primary: RowAction[] = [];
+    const menu: RowAction[] = [];
+
+    if (next) {
+      primary.push({
+        key: 'next',
+        label: next.label,
+        icon: next.nextStatus === 'presupuestado' ? Icons.clipboard : Icons.play,
+        tone: next.color === 'blue' ? 'primary' : 'success',
+        onClick: () => handleStatusChange(rental.id, next.nextStatus),
+      });
+    }
+    if (rental.status === 'iniciado' || rental.status === 'presupuestado') {
+      primary.push({ key: 'bill', label: 'Cobrar', icon: Icons.dollar, tone: 'warning', onClick: () => openBillingDialog(rental) });
+    }
+    if (rental.status === 'finalizado') {
+      primary.push({ key: 'reactivate', label: 'Reactivar', icon: Icons.refresh, tone: 'primary', onClick: () => handleReactivate(rental.id) });
+    }
+
+    menu.push({ key: 'details', label: 'Ver detalles', icon: Icons.eye, onClick: () => openDetailsDialog(rental) });
+    if (rental.status === 'iniciado') {
+      menu.push(
+        { key: 'items', label: 'Editar productos', icon: Icons.box, onClick: () => openEditItemsDialog(rental) },
+        { key: 'partial', label: 'Devolución parcial', icon: Icons.undo, onClick: () => openPartialReturn(rental) },
+        { key: 'return', label: 'Devolver todo', icon: Icons.check, onClick: () => handleFullReturn(rental.id) },
+      );
+    }
+    menu.push(
+      { key: 'remito', label: 'Generar remito', icon: Icons.file, onClick: () => handleGenerarRemito(rental) },
+      { key: 'recibo', label: 'Generar recibo', icon: Icons.receipt, onClick: () => handleGenerarRecibo(rental) },
+      { key: 'delete', label: 'Eliminar alquiler', icon: Icons.trash, tone: 'danger', onClick: () => openDeleteRentalModal(rental) },
+    );
+    return { primary, menu };
+  };
+
   const getNextStatusAction = (rental: any) => {
     switch (rental.status) {
       case 'sin presupuestar':
@@ -673,19 +732,15 @@ export default function AlquileresPage() {
 
   // Auto-iniciar alquileres presupuestados cuando llegue la fecha de creación
   useEffect(() => {
+    // Antes comparaba contra createdAt, que SIEMPRE es hoy o pasado → todo presupuesto se iniciaba al instante.
+    // Ahora: se inicia cuando llega la fecha de inicio real (la adición más antigua de sus productos).
     const checkAutoStart = () => {
+      const today = toDay(new Date());
       rentals.forEach((rental: any) => {
-        if (rental.status === 'presupuestado') {
-          const createdAt = new Date(rental.createdAt);
-          const now = new Date();
-          // Comparar solo las fechas (sin horas)
-          const createdAtDate = new Date(createdAt.getFullYear(), createdAt.getMonth(), createdAt.getDate());
-          const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          
-          // Si la fecha de creación es hoy o ya pasó, iniciar automáticamente
-          if (nowDate >= createdAtDate) {
-            updateRentalStatus(rental.id, 'iniciado');
-          }
+        if (rental.status !== 'presupuestado' || autoStartedRef.current.has(rental.id)) return;
+        if (today >= periodStart(rental)) {
+          autoStartedRef.current.add(rental.id); // evita disparar el PUT repetido cada minuto
+          updateRentalStatus(rental.id, 'iniciado');
         }
       });
     };
@@ -745,27 +800,23 @@ export default function AlquileresPage() {
     let fromDate: Date;
     let toDate: Date;
     
+    // Todos los períodos son [desde, hasta): el día "hasta" no se cobra (18/11 → 18/12 = 1 mes).
     if (billingMode === 'vencimiento') {
-      // Desde la fecha de devolución actual hasta un mes después
-      const returnDate = new Date(selectedRental.returnDate);
-      fromDate = new Date(returnDate);
-      const nextMonth = new Date(returnDate);
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-      toDate = nextMonth;
+      ({ from: fromDate, to: toDate } = vencimientoPeriod(selectedRental));
     } else if (billingMode === 'todate') {
-      fromDate = new Date(selectedRental.createdAt);
-      toDate = new Date();
+      fromDate = periodStart(selectedRental);
+      toDate = toDay(new Date());
     } else if (billingMode === 'month') {
       const now = new Date();
       fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      toDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      toDate = addMonths(fromDate, 1);
     } else {
-      fromDate = billingDateFrom ? new Date(billingDateFrom) : new Date(selectedRental.createdAt);
-      toDate = billingDateTo ? new Date(billingDateTo) : new Date();
+      fromDate = billingDateFrom ? toDay(billingDateFrom) : periodStart(selectedRental);
+      toDate = billingDateTo ? toDay(billingDateTo) : toDay(new Date());
     }
 
     const items = selectedRental.items.map((item: any) => {
-      const billing = calculateBillingForItem(item, fromDate, toDate);
+      const billing = billItem(item, fromDate, toDate);
       let subtotal = billing.total;
       let discount = 0;
       
@@ -825,7 +876,7 @@ export default function AlquileresPage() {
             }}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg"
           >
-            <span className="text-lg">🔄</span>
+            {Icons.refresh}
             Traslado
           </button>
         <button
@@ -929,23 +980,27 @@ export default function AlquileresPage() {
                 <TableHeaderCell className="text-left">Obra</TableHeaderCell>
                 <TableHeaderCell className="text-left">Cliente</TableHeaderCell>
                 <TableHeaderCell className="text-left">Productos</TableHeaderCell>
-                    <TableHeaderCell className="text-left">Precio/Día</TableHeaderCell>
+                    <TableHeaderCell className="text-left">Precio</TableHeaderCell>
                     <TableHeaderCell className="text-left">F. Devolución</TableHeaderCell>
                 <TableHeaderCell className="text-left">Total</TableHeaderCell>
                 <TableHeaderCell className="text-left">Pagado</TableHeaderCell>
                 <TableHeaderCell className="text-left">Resto</TableHeaderCell>
                 <TableHeaderCell className="text-left">Estado</TableHeaderCell>
-                <TableHeaderCell className="text-left">Acciones</TableHeaderCell>
+                <TableHeaderCell className="text-right">Acciones</TableHeaderCell>
               </TableRow>
             </TableHead>
                 <TableBody>
                   {filteredRentals.map((rental: any) => {
                     const dailyTotal = calculateDailyTotal(rental);
                     const toDateTotal = calculateToDateBilling(rental);
-                    const nextAction = getNextStatusAction(rental);
+                    const actions = getRowActions(rental);
                     return (
                   <TableRow key={rental.id}>
-                        <TableCell className="font-medium text-sm">{rental.workName}</TableCell>
+                        <TableCell className="font-medium text-sm">
+                          <button type="button" onClick={() => openDetailsDialog(rental)} className="text-left hover:text-blue-600 hover:underline underline-offset-2" title="Ver detalles">
+                            {rental.workName}
+                          </button>
+                        </TableCell>
                     <TableCell className="text-gray-600 text-sm">{rental.clientName}</TableCell>
                     <TableCell>
                           <div className="space-y-1">
@@ -953,7 +1008,7 @@ export default function AlquileresPage() {
                               <div key={idx} className="text-xs text-gray-600">
                                 <span className="font-medium">{item.productName}</span> ×{item.quantity}
                                 <span className="text-gray-400 ml-1">
-                                  (desde {format(new Date(item.addedDate), 'dd/MM')})
+                                  (desde {format(toDay(item.addedDate), 'dd/MM')})
                                 </span>
                               </div>
                             ))}
@@ -961,23 +1016,17 @@ export default function AlquileresPage() {
                         </TableCell>
                         <TableCell>
                           <div className="text-sm">
-                            <span className="font-semibold text-blue-600">${dailyTotal.toLocaleString()}/día</span>
+                            <span className="font-semibold text-blue-600">${monthlyFromDaily(dailyTotal).toLocaleString()}/mes</span>
                             <div className="text-xs text-gray-400 mt-0.5">
-                              Acumulado: ${toDateTotal.toLocaleString()}
+                              ${(Math.round(dailyTotal * 100) / 100).toLocaleString()}/día · Acumulado: ${toDateTotal.toLocaleString()}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <span className="text-sm">{format(new Date(rental.returnDate), 'dd/MM/yyyy')}</span>
+                            <span className="text-sm">{format(toDay(rental.returnDate), 'dd/MM/yyyy')}</span>
                             {(rental.status === 'iniciado' || rental.status === 'presupuestado' || rental.status === 'sin presupuestar') && (
-                              <button
-                                onClick={() => openEditField(rental, 'returnDate', rental.returnDate)}
-                                className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                title="Editar fecha"
-                              >
-                                ✏️
-                              </button>
+                              <IconButton icon={Icons.pencil} label="Editar fecha de devolución" onClick={() => openEditField(rental, 'returnDate', rental.returnDate)} />
                             )}
                           </div>
                         </TableCell>
@@ -987,13 +1036,7 @@ export default function AlquileresPage() {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <span className="font-medium text-green-600 text-sm">${(rental.pagado || 0).toLocaleString()}</span>
-                            <button
-                              onClick={() => openEditPaymentDialog(rental)}
-                              className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
-                              title="Editar pago"
-                            >
-                              ✏️
-                            </button>
+                            <IconButton icon={Icons.pencil} label="Editar pago" onClick={() => openEditPaymentDialog(rental)} />
                           </div>
                         </TableCell>
                         <TableCell>
@@ -1003,95 +1046,9 @@ export default function AlquileresPage() {
                           {getStatusBadge(rental)}
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-1 flex-wrap">
-                            {/* Botón de avance de estado */}
-                            {nextAction && (
-                              <button
-                                onClick={() => handleStatusChange(rental.id, nextAction.nextStatus)}
-                                className={`px-2 py-1 text-xs font-medium text-white rounded-xl transition-all shadow-sm hover:shadow-md ${
-                                  nextAction.color === 'blue' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'
-                                }`}
-                              >
-                                {nextAction.label}
-                              </button>
-                            )}
-                            
-                            {/* Botón Detalles */}
-                            <button
-                              onClick={() => openDetailsDialog(rental)}
-                              className="px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all"
-                              title="Ver detalles"
-                            >
-                              🔍 Detalles
-                            </button>
-
-                            {/* Botón Cobrar */}
-                            {(rental.status === 'iniciado' || rental.status === 'presupuestado') && (
-                              <button
-                                onClick={() => openBillingDialog(rental)}
-                                className="px-2 py-1 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all"
-                                title="Calcular cobro"
-                              >
-                                💲 Cobrar
-                              </button>
-                            )}
-
-                            {rental.status === 'iniciado' && (
-                              <>
-                                <button
-                                  onClick={() => openEditItemsDialog(rental)}
-                                  className="px-2 py-1 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl transition-all"
-                                  title="Editar productos"
-                                >
-                                  ✏️ Productos
-                                </button>
-                                <button
-                                  onClick={() => openPartialReturn(rental)}
-                                  className="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"
-                                  title="Devolución parcial"
-                                >
-                                  Parcial
-                                </button>
-                                <button
-                                  onClick={() => handleFullReturn(rental.id)}
-                                  className="px-2 py-1 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-sm"
-                                  title="Devolver todo"
-                                >
-                                  Devolver
-                                </button>
-                              </>
-                            )}
-                            {rental.status === 'finalizado' && (
-                              <button
-                                onClick={() => handleReactivate(rental.id)}
-                                className="px-2 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-sm"
-                                title="Reactivar alquiler"
-                              >
-                                🔄 Reactivar
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleGenerarRemito(rental)}
-                              className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all"
-                              title="Generar remito"
-                            >
-                              📄 Remito
-                            </button>
-                            <button
-                              onClick={() => handleGenerarRecibo(rental)}
-                              className="px-2 py-1 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl transition-all"
-                              title="Generar recibo"
-                            >
-                              💰 Recibo
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openDeleteRentalModal(rental)}
-                              className="px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-xl transition-all"
-                              title="Eliminar alquiler"
-                            >
-                              🗑 Eliminar
-                            </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {actions.primary.map((a) => <ActionButton key={a.key} action={a} />)}
+                            <ActionMenu actions={actions.menu} />
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1106,7 +1063,7 @@ export default function AlquileresPage() {
               {filteredRentals.map((rental: any) => {
                 const dailyTotal = calculateDailyTotal(rental);
                 const toDateTotal = calculateToDateBilling(rental);
-                const nextAction = getNextStatusAction(rental);
+                const actions = getRowActions(rental);
                 return (
                   <div key={rental.id} className="border border-gray-200 rounded-2xl p-4 space-y-3 shadow-md">
                     <div className="flex justify-between items-start">
@@ -1125,7 +1082,7 @@ export default function AlquileresPage() {
                           {rental.items.map((item: any, idx: number) => (
                         <div key={idx} className="flex justify-between text-sm">
                           <span className="text-gray-700">{item.productName} ×{item.quantity}</span>
-                          <span className="text-gray-400 text-xs">desde {format(new Date(item.addedDate), 'dd/MM/yy')}</span>
+                          <span className="text-gray-400 text-xs">desde {format(toDay(item.addedDate), 'dd/MM/yy')}</span>
                         </div>
                           ))}
                         </div>
@@ -1133,8 +1090,8 @@ export default function AlquileresPage() {
                     {/* Precio por día */}
                     <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                       <div>
-                        <Text className="text-xs text-gray-500">Precio/Día</Text>
-                        <Text className="text-sm font-semibold text-blue-600">${dailyTotal.toLocaleString()}/día</Text>
+                        <Text className="text-xs text-gray-500">Precio</Text>
+                        <Text className="text-sm font-semibold text-blue-600">${monthlyFromDaily(dailyTotal).toLocaleString()}/mes</Text>
                       </div>
                       <div className="text-right">
                         <Text className="text-xs text-gray-500">Acumulado</Text>
@@ -1145,14 +1102,9 @@ export default function AlquileresPage() {
                     <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                       <div className="flex items-center gap-2">
                         <Text className="text-sm text-gray-600">Devolución:</Text>
-                        <span className="text-sm font-medium">{format(new Date(rental.returnDate), 'dd/MM/yyyy')}</span>
+                        <span className="text-sm font-medium">{format(toDay(rental.returnDate), 'dd/MM/yyyy')}</span>
                         {(rental.status !== 'finalizado') && (
-                          <button
-                            onClick={() => openEditField(rental, 'returnDate', rental.returnDate)}
-                            className="p-1 text-gray-400 hover:text-blue-600"
-                          >
-                            ✏️
-                          </button>
+                          <IconButton icon={Icons.pencil} label="Editar fecha de devolución" onClick={() => openEditField(rental, 'returnDate', rental.returnDate)} />
                         )}
                       </div>
                     </div>
@@ -1166,7 +1118,7 @@ export default function AlquileresPage() {
                         <Text className="text-xs text-gray-500">Pagado</Text>
                         <div className="flex items-center gap-1">
                           <Text className="text-sm font-medium text-green-600">${(rental.pagado || 0).toLocaleString()}</Text>
-                          <button onClick={() => openEditPaymentDialog(rental)} className="p-0.5 text-gray-400 hover:text-green-600">✏️</button>
+                          <IconButton icon={Icons.pencil} label="Editar pago" onClick={() => openEditPaymentDialog(rental)} />
                         </div>
                       </div>
                       <div>
@@ -1183,66 +1135,11 @@ export default function AlquileresPage() {
                       </div>
                     )}
 
-                    <div className="flex flex-col gap-2 pt-2">
-                      <div className="grid grid-cols-2 gap-2">
-                          <button
-                          onClick={() => openDetailsDialog(rental)}
-                          className="px-3 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all"
-                          >
-                          🔍 Detalles
-                          </button>
-                        {(rental.status === 'iniciado' || rental.status === 'presupuestado') && (
-                          <button
-                            onClick={() => openBillingDialog(rental)}
-                            className="px-3 py-2 text-sm font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all"
-                          >
-                            💲 Cobrar
-                          </button>
-                        )}
-                      </div>
-                      {nextAction && (
-                          <button
-                          onClick={() => handleStatusChange(rental.id, nextAction.nextStatus)}
-                          className={`w-full px-3 py-2 text-sm font-medium text-white rounded-xl transition-all shadow-sm ${
-                            nextAction.color === 'blue' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'
-                          }`}
-                        >
-                          {nextAction.label}
-                        </button>
-                      )}
-                      {rental.status === 'iniciado' && (
-                        <>
-                          <button onClick={() => openEditItemsDialog(rental)} className="w-full px-3 py-2 text-sm font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl transition-all">
-                            ✏️ Editar Productos
-                          </button>
-                          <button onClick={() => openPartialReturn(rental)} className="w-full px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all">
-                            Devolución Parcial
-                          </button>
-                          <button onClick={() => handleFullReturn(rental.id)} className="w-full px-3 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-sm">
-                            Devolver Todo
-                          </button>
-                        </>
-                      )}
-                      {rental.status === 'finalizado' && (
-                        <button onClick={() => handleReactivate(rental.id)} className="w-full px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-sm">
-                          🔄 Reactivar Alquiler
-                        </button>
-                      )}
-                      <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => handleGenerarRemito(rental)} className="px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all">
-                          📄 Remito
-                        </button>
-                        <button onClick={() => handleGenerarRecibo(rental)} className="px-3 py-2 text-sm font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl transition-all">
-                          💰 Recibo
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => openDeleteRentalModal(rental)}
-                        className="w-full px-3 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-xl transition-all border border-red-200"
-                      >
-                        🗑 Eliminar alquiler
-                      </button>
+                    <div className="flex gap-2 pt-3 border-t border-gray-100">
+                      {actions.primary.map((a) => (
+                        <div key={a.key} className="flex-1"><ActionButton action={a} block /></div>
+                      ))}
+                      <div className="flex-1"><ActionMenu actions={actions.menu} block /></div>
                     </div>
                   </div>
                 );
@@ -1348,58 +1245,20 @@ export default function AlquileresPage() {
                                 className={freeIntInputCls}
                             />
                           </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs text-gray-500">$/día:</span>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                autoComplete="off"
-                                value={
-                                  item.productId in newRentalDailyDraft
-                                    ? newRentalDailyDraft[item.productId]
-                                    : item.dailyPrice === 0
-                                      ? ''
-                                      : String(item.dailyPrice)
-                                }
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  if (!isLooseDecimalString(v)) return;
-                                  setNewRentalDailyDraft((d) => ({ ...d, [item.productId]: v }));
-                                }}
-                                onBlur={() => {
-                                  const pid = item.productId;
-                                  const raw = (
-                                    pid in newRentalDailyDraft
-                                      ? newRentalDailyDraft[pid]
-                                      : item.dailyPrice === 0
-                                        ? ''
-                                        : String(item.dailyPrice)
-                                  )
-                                    .trim()
-                                    .replace(',', '.');
-                                  const n = parseFloat(raw);
-                                  const num = raw === '' || Number.isNaN(n) ? 0 : n;
-                                  updateItemDailyPrice(pid, num);
-                                  setNewRentalDailyDraft((d) => {
-                                    const next = { ...d };
-                                    if (num === 0) next[pid] = '';
-                                    else delete next[pid];
-                                    return next;
-                                  });
-                                }}
-                                className={freeDecimalInputCls}
-                              />
-                        </div>
+                            <PricePairInputs
+                              dailyPrice={item.dailyPrice}
+                              onDailyChange={(d) => updateItemDailyPrice(item.productId, d)}
+                            />
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">Fecha adición:</span>
                               <input
                                 type="date"
-                                value={item.addedDate ? new Date(item.addedDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
+                                value={item.addedDate ? dayKey(item.addedDate) : todayKey()}
                                 onChange={(e) => updateItemAddedDate(item.productId, e.target.value)}
                                 className="text-xs border border-gray-300 rounded px-2 py-0.5 focus:border-blue-500 focus:outline-none"
                               />
                             </div>
-                            <Text className="text-xs text-gray-500">Total: ${item.totalPrice.toLocaleString()}</Text>
+                            <Text className="text-xs text-gray-500">Presupuesto: ${returnDate ? itemBudget(item, returnDate).toLocaleString() : '—'}</Text>
                           </div>
                       </div>
                     );
@@ -1412,7 +1271,7 @@ export default function AlquileresPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Devolución</label>
               <input
                   type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]} required
+                  min={todayKey()} required
                 className="w-full rounded-xl border border-gray-300 pl-4 pr-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none shadow-sm"
               />
             </div>
@@ -1429,12 +1288,12 @@ export default function AlquileresPage() {
 
               <div className="bg-gray-50 rounded-lg p-3 space-y-1">
                 <div className="flex justify-between items-center">
-                  <Text className="font-medium text-gray-700">Total (presupuesto)</Text>
+                  <Text className="font-medium text-gray-700">Presupuesto hasta vencimiento</Text>
               <Text className="text-xl font-bold">${calculatedTotal.toLocaleString()}</Text>
                 </div>
                 <div className="flex justify-between items-center">
-                  <Text className="text-sm text-gray-500">Precio diario total</Text>
-                  <Text className="text-sm font-semibold text-blue-600">${calculatedDailyTotal.toLocaleString()}/día</Text>
+                  <Text className="text-sm text-gray-500">Precio total</Text>
+                  <Text className="text-sm font-semibold text-blue-600">${monthlyFromDaily(calculatedDailyTotal).toLocaleString()}/mes · ${(Math.round(calculatedDailyTotal * 100) / 100).toLocaleString()}/día</Text>
                 </div>
                 {returnDate && (
                   <div className="flex justify-between items-center">
@@ -1478,7 +1337,7 @@ export default function AlquileresPage() {
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
                   <Text className="text-xs text-gray-500">Devolución</Text>
-                  <Text className="font-semibold text-sm">{format(new Date(selectedRental.returnDate), 'dd/MM/yyyy')}</Text>
+                  <Text className="font-semibold text-sm">{format(toDay(selectedRental.returnDate), 'dd/MM/yyyy')}</Text>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
                   <Text className="text-xs text-gray-500">Días restantes</Text>
@@ -1523,13 +1382,8 @@ export default function AlquileresPage() {
                 <Text className="font-semibold text-gray-700 mb-2">Productos del Alquiler</Text>
                 <div className="border border-gray-200 rounded-xl divide-y overflow-hidden">
                   {selectedRental.items.map((item: any, idx: number) => {
-                    const now = new Date();
-                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const addedDate = new Date(item.addedDate);
-                    const addedDateNormalized = new Date(addedDate.getFullYear(), addedDate.getMonth(), addedDate.getDate());
-                    const daysSinceAdded = Math.max(1, differenceInDays(today, addedDateNormalized) + 1);
-                    const dailyRate = (item.dailyPrice || item.unitPrice) * item.quantity;
-                    const accumulated = daysSinceAdded * dailyRate;
+                    const toDate = billItemToDate(item);
+                    const accumulated = toDate.total;
                     return (
                       <div key={idx} className="p-3 hover:bg-gray-50">
                         <div className="flex justify-between items-start">
@@ -1542,15 +1396,15 @@ export default function AlquileresPage() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
                           <div className="text-xs">
                             <span className="text-gray-400">Agregado:</span>
-                            <span className="ml-1 font-medium">{format(new Date(item.addedDate), 'dd/MM/yyyy')}</span>
+                            <span className="ml-1 font-medium">{format(toDay(item.addedDate), 'dd/MM/yyyy')}</span>
                           </div>
                           <div className="text-xs">
-                            <span className="text-gray-400">Días:</span>
-                            <span className="ml-1 font-medium">{daysSinceAdded}</span>
+                            <span className="text-gray-400">Transcurrido:</span>
+                            <span className="ml-1 font-medium">{formatPeriod(toDate)}</span>
                           </div>
                           <div className="text-xs">
-                            <span className="text-gray-400">$/día:</span>
-                            <span className="ml-1 font-medium text-blue-600">${(item.dailyPrice || item.unitPrice).toLocaleString()} × {item.quantity} = ${dailyRate.toLocaleString()}</span>
+                            <span className="text-gray-400">$/mes:</span>
+                            <span className="ml-1 font-medium text-blue-600">${monthlyFromDaily(item.dailyPrice || item.unitPrice).toLocaleString()} × {item.quantity} = ${toDate.monthlyRate.toLocaleString()}</span>
                           </div>
                           <div className="text-xs">
                             <span className="text-gray-400">Acumulado:</span>
@@ -1579,7 +1433,7 @@ export default function AlquileresPage() {
                       <div key={payment.id} className="grid grid-cols-5 gap-2 p-3 items-center text-sm">
                         <span className="col-span-1 text-gray-700">{format(new Date(payment.date), 'dd/MM/yyyy')}</span>
                         <span className="text-center text-gray-600 text-xs">
-                          {format(new Date(payment.periodFrom), 'dd/MM/yyyy')} - {format(new Date(payment.periodTo), 'dd/MM/yyyy')}
+                          {format(toDay(payment.periodFrom), 'dd/MM/yyyy')} - {format(toDay(payment.periodTo), 'dd/MM/yyyy')}
                         </span>
                         <span className="text-center font-semibold text-green-600">${payment.amount.toLocaleString()}</span>
                         <span className="text-center text-gray-500 text-xs">{payment.notes || '-'}</span>
@@ -1661,11 +1515,9 @@ export default function AlquileresPage() {
                   <button
                     onClick={() => {
                       setBillingMode('vencimiento');
-                      const returnDate = new Date(selectedRental.returnDate);
-                      const nextMonth = new Date(returnDate);
-                      nextMonth.setMonth(nextMonth.getMonth() + 1);
-                      setBillingDateFrom(selectedRental.returnDate.split('T')[0]);
-                      setBillingDateTo(nextMonth.toISOString().split('T')[0]);
+                      const { from, to } = vencimientoPeriod(selectedRental);
+                      setBillingDateFrom(dayKey(from));
+                      setBillingDateTo(dayKey(to));
                     }}
                     className={`px-3 py-2 text-sm font-medium rounded-xl transition-all ${billingMode === 'vencimiento' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                   >
@@ -1767,8 +1619,8 @@ export default function AlquileresPage() {
                     <div className={`grid gap-2 p-3 bg-gray-100 text-xs font-semibold text-gray-600 ${discountType === 'item' ? 'grid-cols-7' : 'grid-cols-5'}`}>
                       <span className="col-span-1">Producto</span>
                       <span className="text-center">Cant.</span>
-                      <span className="text-center">Precio/día</span>
-                      <span className="text-center">Días</span>
+                      <span className="text-center">Precio</span>
+                      <span className="text-center">Período</span>
                       {discountType === 'item' && (
                         <>
                           <span className="text-center">Descuento</span>
@@ -1779,7 +1631,6 @@ export default function AlquileresPage() {
                     </div>
                     {billingDetails.items.map((item: any, idx: number) => {
                       const unitDailyPrice = item.dailyPrice || item.unitPrice;
-                      const totalDailyPrice = unitDailyPrice * item.quantity;
                       const itemDiscount = itemDiscounts[item.productId] || { type: 'percent', value: 0 };
                       
                       return (
@@ -1787,10 +1638,13 @@ export default function AlquileresPage() {
                           <span className="col-span-1 font-medium text-gray-800 truncate">{item.productName}</span>
                           <span className="text-center text-gray-600">{item.quantity}</span>
                           <span className="text-center text-blue-600 text-xs">
-                            <div>${unitDailyPrice.toLocaleString()}/un</div>
-                            <div className="font-semibold">${totalDailyPrice.toLocaleString()}/día</div>
+                            <div className="font-semibold">${monthlyFromDaily(unitDailyPrice).toLocaleString()}/mes</div>
+                            <div>${(Math.round(unitDailyPrice * 100) / 100).toLocaleString()}/día</div>
                           </span>
-                          <span className="text-center text-gray-600">{item.days}</span>
+                          <span className="text-center text-gray-600 text-xs">
+                            <div>{formatPeriod(item)}</div>
+                            <div className="text-gray-400">desde {format(toDay(item.addedDate), 'dd/MM')}</div>
+                          </span>
                           {discountType === 'item' && (
                             <div className="flex gap-1 items-center">
                               <select
@@ -1945,7 +1799,7 @@ export default function AlquileresPage() {
                         <Text className="font-bold text-lg text-blue-900">Total a Cobrar</Text>
                         <Text className="text-xs text-blue-600">
                           {discountType === 'none' 
-                            ? '(Precio unitario/día × cantidad × días transcurridos desde adición de cada producto)'
+                            ? '(Meses completos × precio/mes + días sueltos × precio/día, desde la adición de cada producto)'
                             : discountType === 'item'
                             ? '(Subtotal con descuentos por ítem aplicados)'
                             : '(Subtotal con descuento sobre el total aplicado)'}
@@ -1980,8 +1834,8 @@ export default function AlquileresPage() {
                       recordRentalPayment(
                         selectedRental.id,
                         billingDetails.grandTotal,
-                        billingDetails.fromDate.toISOString(),
-                        billingDetails.toDate.toISOString()
+                        dayKey(billingDetails.fromDate),
+                        dayKey(billingDetails.toDate)
                       );
                       setIsBillingOpen(false);
                     }}
@@ -2177,48 +2031,20 @@ export default function AlquileresPage() {
                                 className={freeIntInputCls}
                               />
                             </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs text-gray-500">$/día:</span>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                autoComplete="off"
-                                value={editingDailyStrs[itemIndex] ?? ''}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  if (!isLooseDecimalString(v)) return;
-                                  setEditingDailyStrs((prev) => {
-                                    const x = [...prev];
-                                    x[itemIndex] = v;
-                                    return x;
-                                  });
-                                }}
-                                onBlur={() => {
-                                  const raw = (editingDailyStrs[itemIndex] ?? '')
-                                    .trim()
-                                    .replace(',', '.');
-                                  let n = parseFloat(raw);
-                                  if (raw === '' || Number.isNaN(n)) n = 0;
-                                  updateEditingItemDailyPrice(itemIndex, n);
-                                  setEditingDailyStrs((prev) => {
-                                    const x = [...prev];
-                                    x[itemIndex] = n === 0 ? '' : String(n);
-                                    return x;
-                                  });
-                                }}
-                                className={freeDecimalInputCls}
-                              />
-                          </div>
+                            <PricePairInputs
+                              dailyPrice={item.dailyPrice ?? item.unitPrice}
+                              onDailyChange={(d) => updateEditingItemDailyPrice(itemIndex, d)}
+                            />
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-500">Fecha adición:</span>
                               <input
                                 type="date"
-                                value={item.addedDate ? new Date(item.addedDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
+                                value={item.addedDate ? dayKey(item.addedDate) : todayKey()}
                                 onChange={(e) => updateEditingItemAddedDate(itemIndex, e.target.value)}
                                 className="text-xs border border-gray-300 rounded px-2 py-0.5 focus:border-blue-500 focus:outline-none"
                               />
                             </div>
-                            <Text className="text-xs text-gray-500">Total: ${item.totalPrice.toLocaleString()}</Text>
+                            <Text className="text-xs text-gray-500">Presupuesto: ${itemBudget(item, selectedRental.returnDate).toLocaleString()}</Text>
                           </div>
                         </div>
                       );
@@ -2228,8 +2054,8 @@ export default function AlquileresPage() {
               )}
 
               <div className="bg-gray-50 rounded-lg p-3 flex justify-between items-center">
-                <Text className="font-medium text-gray-700">Total</Text>
-                <Text className="text-xl font-bold">${editingRentalItems.reduce((sum: number, item: any) => sum + item.totalPrice, 0).toLocaleString()}</Text>
+                <Text className="font-medium text-gray-700">Presupuesto hasta vencimiento</Text>
+                <Text className="text-xl font-bold">${editingRentalItems.reduce((sum: number, item: any) => sum + itemBudget(item, selectedRental.returnDate), 0).toLocaleString()}</Text>
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
