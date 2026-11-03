@@ -45,7 +45,7 @@ export default function ReportesClientesPage() {
     return clientStats.filter((client: any) => {
       const matchesSearch = searchText === '' || 
         client.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        client.email.toLowerCase().includes(searchText.toLowerCase());
+        (client.email || '').toLowerCase().includes(searchText.toLowerCase());
       let matchesActivity = true;
       if (activityFilter === 'active') matchesActivity = client.activeRentals > 0;
       if (activityFilter === 'inactive') matchesActivity = client.activeRentals === 0 && client.totalRentals > 0;

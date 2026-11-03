@@ -57,7 +57,7 @@ export default function ClientesPage() {
     return clientStats.filter((client: any) => {
       const matchesSearch = searchText === '' || 
         client.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        client.email.toLowerCase().includes(searchText.toLowerCase());
+        (client.email || '').toLowerCase().includes(searchText.toLowerCase());
       
       let matchesActivity = true;
       if (activityFilter === 'active') matchesActivity = client.activeRentals > 0;
@@ -92,7 +92,7 @@ export default function ClientesPage() {
 
   const openEditDialog = (client: Client) => {
     setEditingClient(client);
-    setFormData({ name: client.name, email: client.email, phone: client.phone, address: client.address, notes: client.notes || '' });
+    setFormData({ name: client.name, email: client.email || '', phone: client.phone || '', address: client.address || '', notes: client.notes || '' });
     setIsDialogOpen(true);
   };
 
@@ -368,7 +368,7 @@ export default function ClientesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <TextInput type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="correo@ejemplo.com" required />
+              <TextInput type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="correo@ejemplo.com" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
